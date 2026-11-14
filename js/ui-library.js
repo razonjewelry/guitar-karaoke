@@ -10,7 +10,7 @@
       '<h3>' + esc(s.title) + (s.builtin ? '' : '<span class="badge">שלי</span>') + '</h3>' +
       (s.artist ? '<p>' + esc(s.artist) + '</p>' : '') +
       '<div class="chips">' + s.chords.map(function (c) { return '<span class="chip">' + esc(c) + '</span>'; }).join('') + '</div>' +
-      '<div class="meta"><bdi>' + Math.round(s.bpm) + ' BPM</bdi> · <bdi>' + s.time + '</bdi>' + (s.capo ? ' · קאפו ' + s.capo : '') + '</div></a>';
+      '<div class="meta">' + GK.buildSteps(s).length + ' אקורדים · <bdi>' + s.time + '</bdi>' + (s.capo ? ' · קאפו ' + s.capo : '') + '</div></a>';
   }
 
   function download(name, text) {

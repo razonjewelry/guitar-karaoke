@@ -1,4 +1,7 @@
-/* מסך הנגן: מילים עם אקורדים מעליהן, פס פריטה, דיאגרמות, ו"נגן אתה" (גלילה והדגשה בקצב) */
+/*
+ * מסך השיר: מילים עם אקורדים מעליהן, פס פריטה, דיאגרמות.
+ * מצב "הקשבה": האפליקציה מקשיבה למיקרופון; כשמנגנים נכון את האקורד המסומן היא מאשרת ועוברת לבא.
+ */
 (function () {
   var GK = (window.GK = window.GK || {});
   GK.ui = GK.ui || {};
@@ -6,12 +9,11 @@
   var ARROW = { D: '↓', U: '↑', X: '×', '-': '·' };
   var S = null;                                   // הסשן הנוכחי
 
+  // ───── בניית ה-HTML ─────
   function strumMini(arr) { return arr.map(function (a) { return '<span>' + ARROW[a] + '</span>'; }).join(''); }
 
   function segHtml(s) {
-    var words = s.parts.map(function (p) {
-      return p.w ? '<span class="w" data-f="' + p.f0.toFixed(3) + '">' + esc(p.t) + '</span>' : esc(p.t);
-    }).join('');
+    var words = s.parts.map(function (p) { return p.w ? '<span class="w">' + esc(p.t) + '</span>' : esc(p.t); }).join('');
     return '<span class="seg"><span class="ch">' + (s.c ? esc(s.c) : '&nbsp;') + '</span><span class="tx">' + (words || '&nbsp;') + '</span></span>';
   }
 
@@ -39,102 +41,119 @@
     S.patKey = key;
     for (var i = 0; i < S.slots.length; i++) S.slots[i].querySelector('.ar').textContent = ARROW[pat[i]];
   }
-  function setSlot(i) {
-    if (S.slotOn === i) return;
-    if (S.slots[S.slotOn]) S.slots[S.slotOn].classList.remove('on');
-    if (S.slots[i]) S.slots[i].classList.add('on');
-    S.slotOn = i;
-  }
+
   function setChord(c) {
-    if (c === S.curChord) return;
     if (S.curChord && S.cards[S.curChord]) S.cards[S.curChord].classList.remove('on');
+    S.curChord = c;
     if (c && S.cards[c]) {
       var el = S.cards[c];
       el.classList.add('on');
       S.bar.scrollTo({ left: el.offsetLeft - S.bar.clientWidth / 2 + el.offsetWidth / 2, behavior: 'smooth' });
     }
-    S.curChord = c;
   }
-  function clearWords(i) {
-    S.words[i].forEach(function (w) { w.el.classList.remove('sung'); });
+
+  function setHint(html, cls) {
+    S.hint.innerHTML = html;
+    S.hint.className = 'hint' + (cls ? ' ' + cls : '');
   }
-  function clearHighlights() {
-    for (var i = 0; i < S.lines.length; i++) { S.lines[i].classList.remove('cur', 'past'); clearWords(i); }
-    if (S.actSeg) { S.actSeg.classList.remove('act'); S.actSeg = null; }
-    S.lastLine = -2; S.wp = 0;
+
+  function setHeard(heard, target) {
+    var txt = '🎤 ' + (heard || '—');
+    if (S.heard.textContent !== txt) S.heard.textContent = txt;
+    S.heard.className = 'heard' + (heard ? (heard === target ? ' ok' : ' bad') : '');
   }
-  function setLine(L) {
-    var prev = S.lastLine;
-    if (prev >= 0 && S.lines[prev]) { S.lines[prev].classList.remove('cur'); clearWords(prev); }
-    for (var i = 0; i < S.lines.length; i++) S.lines[i].classList.toggle('past', i < L);
-    S.lines[L].classList.add('cur');
-    clearWords(L);
-    S.wp = 0; S.lastLine = L; S.resume = L;
-    setStrip(S.song.lines[L].strum);
-    S.lyr.scrollTo({ top: Math.max(0, S.lines[L].offsetTop - S.lyr.clientHeight * 0.28), behavior: 'smooth' });
-  }
-  function updateWords(frac) {
-    var arr = S.words[S.lastLine];
-    while (S.wp < arr.length && arr[S.wp].f <= frac) { arr[S.wp].el.classList.add('sung'); S.wp++; }
-  }
-  function markChord(L, frac) {
-    var line = S.song.lines[L], idx = -1;
-    for (var k = 0; k < line.segs.length; k++) if (line.segs[k].c && line.segs[k].f0 <= frac + 1e-4) idx = k;
-    var el = idx >= 0 ? S.segEls[L][idx] : null;
-    if (el !== S.actSeg) {
-      if (S.actSeg) S.actSeg.classList.remove('act');
-      if (el) el.classList.add('act');
-      S.actSeg = el;
+
+  /** מעביר את "הצעד הנוכחי" לאקורד מספר i ומעדכן את כל הסימונים (נעשה / עכשיו / עתיד) */
+  function setStep(i) {
+    var n = S.steps.length, cur = S.steps[i] || null;
+    S.idx = i;
+    S.steps.forEach(function (st, k) {
+      var el = S.segEls[st.line][st.seg];
+      el.classList.toggle('done', k < i);
+      el.classList.toggle('act', k === i);
+    });
+    var curLine = cur ? cur.line : S.lines.length;
+    for (var L = 0; L < S.lines.length; L++) {
+      S.lines[L].classList.toggle('past', L < curLine);
+      S.lines[L].classList.toggle('cur', cur !== null && L === curLine);
     }
-    setChord(S.eng.chordAt(L, frac));
+    S.step.textContent = Math.min(i + 1, n) + '/' + n;
+    S.matcher.reset();
+    if (cur) {
+      setChord(cur.chord);
+      setStrip(S.song.lines[cur.line].strum);
+      setHint('נגן: <b>' + esc(cur.chord) + '</b>');
+      S.lyr.scrollTo({ top: Math.max(0, S.lines[cur.line].offsetTop - S.lyr.clientHeight * 0.3), behavior: 'smooth' });
+    } else {
+      setChord(null);
+      setHint('כל הכבוד! סיימת את השיר 🎸', 'ok');
+    }
+    setHeard(null, null);
   }
-  function showCount(n) { S.count.hidden = false; S.count.innerHTML = '<b>' + n + '</b>'; }
-  function hideCount() { S.count.hidden = true; }
-  function setPlayUi(on) {
-    S.playBtn.textContent = on ? '⏸ עצור' : '▶ נגן';
+
+  function flash(el, cls) {
+    el.classList.remove(cls);
+    void el.offsetWidth;                          // מאתחל את האנימציה
+    el.classList.add(cls);
+  }
+
+  // ───── הקשבה ─────
+  function onFrame(f) {
+    if (!S || !S.listening) return;
+    var st = S.steps[S.idx];
+    if (!st) return;
+    var r = S.matcher.feed(f, st.chord, S.song.chords);
+    setHeard(r.heard, st.chord);
+    if (r.status === 'confirm') {
+      flash(S.segEls[st.line][st.seg], 'just');
+      if (S.cards[st.chord]) flash(S.cards[st.chord], 'flash');
+      if (navigator.vibrate) navigator.vibrate(35);
+      if (S.idx + 1 >= S.steps.length) { setStep(S.steps.length); stopListen(); GK.toast('סיימת את השיר 🎸'); }
+      else setStep(S.idx + 1);
+    } else if (r.status === 'wrong') {
+      setHint('שמעתי <b>' + esc(r.heard) + '</b> — צריך <b>' + esc(st.chord) + '</b>', 'warn');
+    } else if (r.status === 'ok' || r.status === 'settling') {
+      setHint('נגן: <b>' + esc(st.chord) + '</b>');
+    }
+  }
+
+  function setListenUi(on) {
+    S.playBtn.textContent = on ? '⏹ עצור' : '🎤 התחל';
     S.playBtn.classList.toggle('on', on);
   }
 
-  // ───── נגינה ─────
-  function frame() {
+  function startListen() {
+    if (S.idx >= S.steps.length) setStep(0);
+    S.playBtn.disabled = true;
+    GK.listen.start(onFrame).then(function () {
+      if (!S) { GK.listen.stop(); return; }
+      S.listening = true;
+      S.playBtn.disabled = false;
+      setListenUi(true);
+      S.matcher.reset();
+    }).catch(function () {
+      if (!S) return;
+      S.playBtn.disabled = false;
+      GK.toast('אין גישה למיקרופון — אשר הרשאה בדפדפן');
+    });
+  }
+
+  function stopListen() {
+    GK.listen.stop();
     if (!S) return;
-    var st = S.eng.state();
-    if (!st.running) { S.raf = 0; return; }
-    if (st.done) { stopPlay(); GK.toast('סוף השיר 🎸'); return; }
-    if (st.counting) {
-      showCount(st.countBeat);
-      if (S.lastLine !== S.resume) setLine(S.resume);
-      setSlot(st.slot);
-    } else {
-      hideCount();
-      if (st.line !== S.lastLine) setLine(st.line);
-      updateWords(st.frac);
-      markChord(st.line, st.frac);
-      setSlot(st.slot);
-    }
-    S.raf = requestAnimationFrame(frame);
+    S.listening = false;
+    setListenUi(false);
+    setHeard(null, null);
   }
-  function startFrom(i) {
-    if (!S.eng.start(i)) { GK.toast('אין תמיכה באודיו בדפדפן הזה'); return; }
-    S.playing = true; S.resume = i; S.lastLine = -2;
-    setPlayUi(true);
-    if (!S.raf) S.raf = requestAnimationFrame(frame);
-  }
-  function stopPlay() {
-    S.eng.pause();
-    S.playing = false;
-    setPlayUi(false);
-    hideCount();
-    if (S.raf) { cancelAnimationFrame(S.raf); S.raf = 0; }
-    clearHighlights();
-    setChord(null);
-    setSlot(-1);
+
+  function jumpToLine(i) {
+    for (var k = 0; k < S.steps.length; k++) if (S.steps[k].line >= i) { setStep(k); return; }
   }
 
   function close() {
     if (!S) return;
-    if (S.raf) cancelAnimationFrame(S.raf);
-    S.eng.pause();
+    GK.listen.stop();
+    document.removeEventListener('visibilitychange', S.onHide);
     S.root.innerHTML = '';
     S = null;
   }
@@ -143,12 +162,9 @@
     close();
     var root = document.getElementById('v-player');
     var set = GK.store.settings();
-    var eng = GK.createEngine(song);
-    eng.setSpeed(set.speed);
-    eng.setMetro(set.metro);
+    var steps = GK.buildSteps(song);
     var first = song.lines[0] ? song.lines[0].strum : ['-'];
-    var meta = '<bdi>' + Math.round(song.bpm) + ' BPM</bdi> · <bdi>' + song.time + '</bdi>' +
-      (song.capo ? ' · קאפו ' + song.capo : '') + (song.artist ? ' · ' + esc(song.artist) : '');
+    var meta = '<bdi>' + song.time + '</bdi>' + (song.capo ? ' · קאפו ' + song.capo : '') + (song.artist ? ' · ' + esc(song.artist) : '');
 
     root.innerHTML =
       '<header class="p-top"><a class="btn icon" href="#/" aria-label="חזרה">→</a>' +
@@ -158,53 +174,47 @@
         return '<div class="cc" data-c="' + esc(c) + '">' + GK.chordSvg(c) + '<span>' + esc(c) + '</span></div>';
       }).join('') + '</div>' +
       '<div class="strumbar"><span class="lab">פריטה</span><div class="slots" id="p-slots">' + stripHtml(song, first) + '</div></div>' +
-      '<div class="lwrap"><div class="lyrics" id="p-lyrics">' + lyricsHtml(song) + '</div><div class="count" id="p-count" hidden></div></div>' +
-      '<footer class="dock"><button class="play" id="p-play">▶ נגן</button>' +
-      '<div class="pill"><button id="p-slow" aria-label="האט">−</button><span id="p-speed">' + Math.round(set.speed * 100) + '%</span><button id="p-fast" aria-label="האץ">+</button></div>' +
-      '<button class="btn tog' + (set.metro ? ' on' : '') + '" id="p-metro" aria-label="מטרונום">🔔</button>' +
+      '<div class="status"><span class="step" id="p-step">0/' + steps.length + '</span><span class="hint" id="p-hint"></span><span class="heard" id="p-heard">🎤 —</span></div>' +
+      '<div class="lwrap"><div class="lyrics" id="p-lyrics">' + lyricsHtml(song) + '</div></div>' +
+      '<footer class="dock"><button class="play" id="p-play">🎤 התחל</button>' +
+      '<button class="btn" id="p-back" aria-label="אקורד קודם">⏮</button>' +
+      '<button class="btn" id="p-skip" aria-label="דלג על האקורד">⏭</button>' +
+      '<button class="btn tog" id="p-sens" aria-label="רגישות המיקרופון"></button>' +
       '<button class="btn tog" id="p-font" aria-label="גודל גופן">Aa</button></footer>';
     root.style.setProperty('--fs', set.fontPx + 'px');
 
     var q = function (sel) { return root.querySelector(sel); };
     S = {
-      song: song, eng: eng, root: root, set: set, lyr: q('#p-lyrics'), bar: q('#p-chords'), count: q('#p-count'),
-      playBtn: q('#p-play'), slots: root.querySelectorAll('#p-slots .slot'), cards: {},
-      lines: [], words: [], segEls: [], raf: 0, idleRaf: 0, playing: false,
-      lastLine: -2, resume: 0, wp: 0, curChord: null, actSeg: null, patKey: first.join(''), slotOn: -1
+      song: song, root: root, set: set, steps: steps, idx: 0, listening: false,
+      lyr: q('#p-lyrics'), bar: q('#p-chords'), playBtn: q('#p-play'), hint: q('#p-hint'), heard: q('#p-heard'), step: q('#p-step'),
+      slots: root.querySelectorAll('#p-slots .slot'), cards: {}, lines: [], segEls: [],
+      patKey: first.join(''), curChord: null, matcher: GK.createMatcher(GK.SENS[set.sens] || GK.SENS[1])
     };
     Array.prototype.forEach.call(root.querySelectorAll('.cc'), function (c) { S.cards[c.getAttribute('data-c')] = c; });
     Array.prototype.forEach.call(S.lyr.querySelectorAll('.ln'), function (ln) {
       S.lines.push(ln);
       S.segEls.push(ln.querySelectorAll('.seg'));
-      S.words.push(Array.prototype.map.call(ln.querySelectorAll('.w'), function (w) { return { el: w, f: parseFloat(w.getAttribute('data-f')) }; }));
     });
+    S.onHide = function () { if (document.hidden && S && S.listening) stopListen(); };   // חוסך סוללה ופרטיות
+    document.addEventListener('visibilitychange', S.onHide);
+
+    var senLabel = function () { q('#p-sens').textContent = '🎚 ' + GK.SENS[S.set.sens].name; };
+    senLabel();
 
     // אירועים
     S.lyr.addEventListener('click', function (e) {
       var ln = e.target.closest ? e.target.closest('.ln') : null;
-      if (ln) startFrom(parseInt(ln.getAttribute('data-i'), 10));
+      if (ln) jumpToLine(parseInt(ln.getAttribute('data-i'), 10));
     });
-    S.lyr.addEventListener('scroll', function () {            // כשלא מנגנים: הפס מראה את דפוס הקטע שבמסך
-      if (S.playing || S.idleRaf) return;
-      S.idleRaf = requestAnimationFrame(function () {
-        S.idleRaf = 0;
-        if (!S) return;
-        var top = S.lyr.scrollTop + 40, idx = 0;
-        for (var i = 0; i < S.lines.length; i++) { if (S.lines[i].offsetTop + S.lines[i].offsetHeight > top) { idx = i; break; } }
-        setStrip(S.song.lines[idx].strum);
-      });
-    }, { passive: true });
-    S.playBtn.addEventListener('click', function () { if (S.playing) stopPlay(); else startFrom(S.resume || 0); });
-    var sp = function (d) {
-      var v = Math.max(0.5, Math.min(1.5, Math.round((S.set.speed + d) * 10) / 10));
-      S.set.speed = v; GK.store.setSetting('speed', v); S.eng.setSpeed(v);
-      q('#p-speed').textContent = Math.round(v * 100) + '%';
-    };
-    q('#p-slow').addEventListener('click', function () { sp(-0.1); });
-    q('#p-fast').addEventListener('click', function () { sp(0.1); });
-    q('#p-metro').addEventListener('click', function (e) {
-      S.set.metro = !S.set.metro; GK.store.setSetting('metro', S.set.metro);
-      S.eng.setMetro(S.set.metro); e.currentTarget.classList.toggle('on', S.set.metro);
+    S.playBtn.addEventListener('click', function () { if (S.listening) stopListen(); else startListen(); });
+    q('#p-back').addEventListener('click', function () { setStep(Math.max(0, Math.min(S.idx, S.steps.length) - 1)); });
+    q('#p-skip').addEventListener('click', function () { if (S.idx < S.steps.length) setStep(S.idx + 1); });
+    q('#p-sens').addEventListener('click', function () {
+      S.set.sens = (S.set.sens + 1) % GK.SENS.length;
+      GK.store.setSetting('sens', S.set.sens);
+      S.matcher.setSens(GK.SENS[S.set.sens]);
+      senLabel();
+      GK.toast('רגישות: ' + GK.SENS[S.set.sens].name);
     });
     var SIZES = [18, 22, 26, 30, 34, 40];            // לחיצה על Aa עוברת לגודל הבא וחוזרת להתחלה
     q('#p-font').addEventListener('click', function () {
@@ -221,7 +231,10 @@
         location.hash = '#/edit/' + id;
       } else location.hash = '#/edit/' + encodeURIComponent(song.id);
     });
+
+    if (steps.length) setStep(0);
+    else setHint('אין אקורדים בשיר הזה', 'warn');
   }
 
-  GK.ui.player = { open: open, close: close, isPlaying: function () { return !!(S && S.playing); } };
+  GK.ui.player = { open: open, close: close, isPlaying: function () { return !!(S && S.listening); } };
 })();

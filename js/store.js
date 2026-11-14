@@ -2,7 +2,7 @@
 (function () {
   var GK = (window.GK = window.GK || {});
   var K_SONGS = 'gk_user_songs_v1', K_SET = 'gk_settings_v1';
-  var DEFAULTS = { fontPx: 22, metro: true, speed: 1 };
+  var DEFAULTS = { fontPx: 22, sens: 1 };
 
   function read(key, def) {
     try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch (e) { return def; }

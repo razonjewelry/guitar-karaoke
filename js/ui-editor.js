@@ -5,12 +5,11 @@
   var esc = GK.esc;
 
   var TEMPLATE =
-    '{title: שם השיר}\n{artist: }\n{bpm: 90}\n{time: 4/4}\n{strum: D - D U - U D U}\n{bars: 2}\n\n' +
+    '{title: שם השיר}\n{artist: }\n{time: 4/4}\n{strum: D - D U - U D U}\n\n' +
     '{section: בית}\n[Am]כאן כותבים את [C]המילים, והאקורד [G]מעל המילה\n[F]שורה שנייה של [E]השיר\n';
   var CHORDS = ['A', 'Am', 'A7', 'B7', 'Bm', 'C', 'C7', 'D', 'D7', 'Dm', 'E', 'E7', 'Em', 'F', 'G', 'G7'];
   var DIRS = [
-    ['קטע', '{section: בית}'], ['פריטה', '{strum: D - D U - U D U}'],
-    ['קצב', '{bpm: 90}'], ['תיבות', '{bars: 2}'], ['קאפו', '{capo: 2}']
+    ['קטע', '{section: בית}'], ['פריטה', '{strum: D - D U - U D U}'], ['קאפו', '{capo: 2}']
   ];
 
   function insertAt(ta, text, newLine) {
@@ -50,10 +49,10 @@
         '<div id="e-msg"></div>' +
         '<details><summary>איך כותבים שיר?</summary>' +
         '<p>כל שורה היא שורת מילים. אקורד נכתב בסוגריים מרובעים <b>מיד לפני</b> המילה שמעליה הוא יושב: <code>[Am]שלום [C]עולם</code>.</p>' +
-        '<p>הנחיות (שורה משלהן): <code>{title: ..}</code> <code>{bpm: 90}</code> <code>{time: 4/4}</code> (גם 3/4, 6/8, 2/4) ' +
+        '<p>הנחיות (כל אחת בשורה משלה): <code>{title: ..}</code> <code>{artist: ..}</code> <code>{time: 4/4}</code> (גם 3/4, 6/8, 2/4) ' +
         '<code>{strum: D - D U - U D U}</code> (D מטה, U מעלה, מקף = מנוחה, X = השתקה; 8 מקומות ב-4/4) ' +
-        '<code>{bars: 2}</code> (כמה תיבות בכל שורה) <code>{section: בית}</code> <code>{capo: 2}</code>.</p>' +
-        '<p>אפשר לקבוע תיבות לשורה בודדת: מוסיפים בסופה <code>|4</code>. שורה ריקה = רווח.</p></details></div>';
+        '<code>{section: בית}</code> <code>{capo: 2}</code>.</p>' +
+        '<p>שורה ריקה = רווח. השיר מתקדם לפי האקורדים שכתבת, לפי הסדר.</p></details></div>';
 
       var ta = root.querySelector('#e-ta'), msg = root.querySelector('#e-msg');
       ta.value = text;
