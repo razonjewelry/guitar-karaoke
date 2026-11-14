@@ -1,9 +1,9 @@
 /* Service worker: האפליקציה נשמרת במכשיר ועובדת בלי אינטרנט.
    אסטרטגיה "רשת קודם": כשיש אינטרנט תמיד מקבלים את הגרסה העדכנית (עם timeout של 4 שניות), ואם אין — מהמטמון. */
-var VERSION = 'gk-v3';
+var VERSION = 'gk-v4';
 var FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/styles.css',
-  'js/util.js', 'js/chords-db.js', 'js/parser.js', 'js/store.js', 'js/chroma.js', 'js/stepper.js', 'js/listen.js',
+  'js/util.js', 'js/chords-db.js', 'js/parser.js', 'js/store.js', 'js/fft.js', 'js/chroma.js', 'js/strum.js', 'js/stepper.js', 'js/listen.js',
   'js/catalog.js', 'js/ui-library.js', 'js/ui-player.js', 'js/ui-editor.js', 'js/app.js',
   'data/songs.js', 'icons/icon-192.png', 'icons/icon-512.png'
 ];

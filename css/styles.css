@@ -105,6 +105,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .status .heard.bad { color: #f0b36a; }
 button:disabled { opacity: .55; }
 
+.status2 { display: flex; align-items: center; gap: 10px; padding: 4px 14px; background: var(--panel2); border-bottom: 1px solid var(--line); font-size: 13px; }
+.lvl { flex: 0 0 90px; height: 8px; border-radius: 4px; background: #2a2f3a; overflow: hidden; direction: ltr; display: block; }
+.lvl b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--green), var(--gold)); transition: width .06s; }
+.status2 .cnt { flex: 1; text-align: center; color: var(--muted); font-weight: 700; }
+.status2 .btn { padding: 3px 10px; font-size: 13px; }
+.slot.hit { background: var(--green); color: #04210f; }
+.slot.next { outline: 2px solid var(--gold); outline-offset: -2px; }
+
 
 .dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; align-items: center; gap: 6px;
   padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); background: rgba(23,26,33,.96);

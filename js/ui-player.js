@@ -1,6 +1,7 @@
 /*
  * מסך השיר: מילים עם אקורדים מעליהן, פס פריטה, דיאגרמות.
- * מצב "הקשבה": האפליקציה מקשיבה למיקרופון; כשמנגנים נכון את האקורד המסומן היא מאשרת ועוברת לבא.
+ * מצב "הקשבה": האפליקציה מקשיבה למיקרופון, סופרת את הפריטות שלך ומתקדמת בדפוס הפריטה;
+ * כשמנגנים נכון את האקורד המסומן היא מאשרת ועוברת לבא ("דפוס מלא" = גם צריך לסיים את כל הפריטות של האקורד).
  */
 (function () {
   var GK = (window.GK = window.GK || {});
@@ -36,10 +37,23 @@
 
   // ───── עדכוני תצוגה ─────
   function setStrip(pat) {
+    S.pos = GK.strumPositions(pat);
     var key = pat.join('');
     if (S.patKey === key) return;
     S.patKey = key;
     for (var i = 0; i < S.slots.length; i++) S.slots[i].querySelector('.ar').textContent = ARROW[pat[i]];
+  }
+
+  /** מסמן בפס הפריטה אילו פריטות כבר נוגנו בתיבה הנוכחית ומה הפריטה הבאה, ומעדכן את המונה */
+  function renderHits() {
+    var len = S.pos.length, c = S.stepOnsets.length;
+    var inBar = len ? (c === 0 ? 0 : ((c - 1) % len) + 1) : 0;
+    for (var s = 0; s < S.slots.length; s++) {
+      var pi = S.pos.indexOf(s);
+      S.slots[s].classList.toggle('hit', pi >= 0 && pi < inBar);
+      S.slots[s].classList.toggle('next', pi >= 0 && S.listening && pi === inBar % len);
+    }
+    S.cnt.textContent = 'פריטות: ' + (S.set.full && len ? Math.min(c, len) + '/' + len : c);
   }
 
   function setChord(c) {
@@ -57,16 +71,21 @@
     S.hint.className = 'hint' + (cls ? ' ' + cls : '');
   }
 
-  function setHeard(heard, target) {
-    var txt = '🎤 ' + (heard || '—');
+  function setHeard(heard, target, score) {
+    var txt = '🎤 ' + (heard ? heard + (score ? ' ' + Math.round(score * 100) + '%' : '') : '—');
     if (S.heard.textContent !== txt) S.heard.textContent = txt;
     S.heard.className = 'heard' + (heard ? (heard === target ? ' ok' : ' bad') : '');
   }
 
-  /** מעביר את "הצעד הנוכחי" לאקורד מספר i ומעדכן את כל הסימונים (נעשה / עכשיו / עתיד) */
-  function setStep(i) {
+  function setLevel(rms) {
+    var pct = Math.max(0, Math.min(1, (Math.log10(Math.max(rms, 1e-5)) + 3.2) / 2.4)) * 100;
+    S.lvl.style.width = pct.toFixed(0) + '%';
+  }
+
+  /** מעביר את "הצעד הנוכחי" לאקורד מספר i ומעדכן את כל הסימונים. carry = פריטות שכבר שייכות לצעד החדש; keepPrev = מעבר אוטומטי */
+  function setStep(i, carry, keepPrev) {
     var n = S.steps.length, cur = S.steps[i] || null;
-    S.idx = i;
+    S.idx = i; S.chordOk = false; S.confirmIdx = 0; S.stepOnsets = carry || [];
     S.steps.forEach(function (st, k) {
       var el = S.segEls[st.line][st.seg];
       el.classList.toggle('done', k < i);
@@ -78,7 +97,7 @@
       S.lines[L].classList.toggle('cur', cur !== null && L === curLine);
     }
     S.step.textContent = Math.min(i + 1, n) + '/' + n;
-    S.matcher.reset();
+    S.matcher.reset(keepPrev);
     if (cur) {
       setChord(cur.chord);
       setStrip(S.song.lines[cur.line].strum);
@@ -88,6 +107,7 @@
       setChord(null);
       setHint('כל הכבוד! סיימת את השיר 🎸', 'ok');
     }
+    renderHits();
     setHeard(null, null);
   }
 
@@ -98,39 +118,69 @@
   }
 
   // ───── הקשבה ─────
-  function onFrame(f) {
-    if (!S || !S.listening) return;
+  /** עובר לאקורד הבא אחרי שהאקורד אושר (ובמצב דפוס מלא — אחרי שהושלמו הפריטות) */
+  function advance() {
     var st = S.steps[S.idx];
-    if (!st) return;
-    var r = S.matcher.feed(f, st.chord, S.song.chords);
-    setHeard(r.heard, st.chord);
-    if (r.status === 'confirm') {
-      flash(S.segEls[st.line][st.seg], 'just');
-      if (S.cards[st.chord]) flash(S.cards[st.chord], 'flash');
-      if (navigator.vibrate) navigator.vibrate(35);
-      if (S.idx + 1 >= S.steps.length) { setStep(S.steps.length); stopListen(); GK.toast('סיימת את השיר 🎸'); }
-      else setStep(S.idx + 1);
-    } else if (r.status === 'wrong') {
-      setHint('שמעתי <b>' + esc(r.heard) + '</b> — צריך <b>' + esc(st.chord) + '</b>', 'warn');
-    } else if (r.status === 'ok' || r.status === 'settling') {
-      setHint('נגן: <b>' + esc(st.chord) + '</b>');
+    flash(S.segEls[st.line][st.seg], 'just');
+    if (S.cards[st.chord]) flash(S.cards[st.chord], 'flash');
+    if (navigator.vibrate) navigator.vibrate(35);
+    var carry = S.set.full ? [] : S.stepOnsets.filter(function (i) { return i > S.confirmIdx; });   // פריטות שכבר שייכות לאקורד הבא
+    if (S.idx + 1 >= S.steps.length) { setStep(S.steps.length); stopListen(); GK.toast('סיימת את השיר 🎸'); }
+    else setStep(S.idx + 1, carry, true);
+  }
+
+  /** בודק אם אפשר להתקדם: האקורד אושר, ובמצב דפוס מלא גם הושלמו כל הפריטות */
+  function maybeAdvance() {
+    if (!S.chordOk) return;
+    var need = S.pos.length;
+    if (S.set.full && need && S.stepOnsets.length < need) {
+      setHint('✓ <b>' + esc(S.steps[S.idx].chord) + '</b> — השלם את הדפוס (' + S.stepOnsets.length + '/' + need + ')', 'ok');
+      return;
     }
+    advance();
+  }
+
+  function onResult(r) {
+    if (!S || !S.listening) return;
+    setLevel(r.level);
+    r.onsets.forEach(function (o) {                // כל פריטה נספרת מיד, לפני שהאקורד נותח
+      S.stepOnsets.push(o.idx);
+      S.total++;
+      renderHits();
+      maybeAdvance();
+    });
+    r.analyses.forEach(function (a) {
+      var st = S.steps[S.idx];
+      if (!st || !S.listening) return;
+      var j = S.matcher.judge(a, st.chord, S.song.chords);
+      if (j.status === 'prev') {                   // פריטה נוספת של האקורד הקודם: לא שייכת לצעד הזה, לא נספרת בו
+        S.stepOnsets = S.stepOnsets.filter(function (i) { return i !== a.idx; });
+        renderHits();
+        setHeard(j.heard, j.heard, j.score);
+        return;
+      }
+      setHeard(j.heard, st.chord, j.score);
+      if (j.status === 'confirm') { S.chordOk = true; S.confirmIdx = a.idx; maybeAdvance(); }
+      else if (j.status === 'maybe') setHint('כמעט… עוד פריטה של <b>' + esc(st.chord) + '</b>');
+      else if (j.status === 'wrong') setHint('שמעתי <b>' + esc(j.heard) + '</b> — צריך <b>' + esc(st.chord) + '</b>', 'warn');
+    });
   }
 
   function setListenUi(on) {
     S.playBtn.textContent = on ? '⏹ עצור' : '🎤 התחל';
     S.playBtn.classList.toggle('on', on);
+    renderHits();
   }
 
   function startListen() {
     if (S.idx >= S.steps.length) setStep(0);
     S.playBtn.disabled = true;
-    GK.listen.start(onFrame).then(function () {
+    GK.listen.start(onResult, GK.SENS[S.set.sens].k).then(function () {
       if (!S) { GK.listen.stop(); return; }
       S.listening = true;
       S.playBtn.disabled = false;
-      setListenUi(true);
       S.matcher.reset();
+      setListenUi(true);
     }).catch(function () {
       if (!S) return;
       S.playBtn.disabled = false;
@@ -144,6 +194,7 @@
     S.listening = false;
     setListenUi(false);
     setHeard(null, null);
+    S.lvl.style.width = '0';
   }
 
   function jumpToLine(i) {
@@ -175,6 +226,8 @@
       }).join('') + '</div>' +
       '<div class="strumbar"><span class="lab">פריטה</span><div class="slots" id="p-slots">' + stripHtml(song, first) + '</div></div>' +
       '<div class="status"><span class="step" id="p-step">0/' + steps.length + '</span><span class="hint" id="p-hint"></span><span class="heard" id="p-heard">🎤 —</span></div>' +
+      '<div class="status2"><i class="lvl" title="עוצמת המיקרופון"><b id="p-lvl"></b></i><span class="cnt" id="p-cnt">פריטות: 0</span>' +
+      '<button class="btn tog" id="p-full" aria-label="מצב דפוס"></button></div>' +
       '<div class="lwrap"><div class="lyrics" id="p-lyrics">' + lyricsHtml(song) + '</div></div>' +
       '<footer class="dock"><button class="play" id="p-play">🎤 התחל</button>' +
       '<button class="btn" id="p-back" aria-label="אקורד קודם">⏮</button>' +
@@ -185,11 +238,13 @@
 
     var q = function (sel) { return root.querySelector(sel); };
     S = {
-      song: song, root: root, set: set, steps: steps, idx: 0, listening: false,
+      song: song, root: root, set: set, steps: steps, idx: 0, listening: false, chordOk: false, confirmIdx: 0, stepOnsets: [], total: 0, pos: [],
       lyr: q('#p-lyrics'), bar: q('#p-chords'), playBtn: q('#p-play'), hint: q('#p-hint'), heard: q('#p-heard'), step: q('#p-step'),
+      cnt: q('#p-cnt'), lvl: q('#p-lvl'),
       slots: root.querySelectorAll('#p-slots .slot'), cards: {}, lines: [], segEls: [],
       patKey: first.join(''), curChord: null, matcher: GK.createMatcher(GK.SENS[set.sens] || GK.SENS[1])
     };
+    S.pos = GK.strumPositions(first);
     Array.prototype.forEach.call(root.querySelectorAll('.cc'), function (c) { S.cards[c.getAttribute('data-c')] = c; });
     Array.prototype.forEach.call(S.lyr.querySelectorAll('.ln'), function (ln) {
       S.lines.push(ln);
@@ -199,7 +254,8 @@
     document.addEventListener('visibilitychange', S.onHide);
 
     var senLabel = function () { q('#p-sens').textContent = '🎚 ' + GK.SENS[S.set.sens].name; };
-    senLabel();
+    var fullLabel = function () { q('#p-full').textContent = S.set.full ? '🥁 דפוס מלא' : '🥁 חופשי'; q('#p-full').classList.toggle('on', !!S.set.full); };
+    senLabel(); fullLabel();
 
     // אירועים
     S.lyr.addEventListener('click', function (e) {
@@ -213,8 +269,15 @@
       S.set.sens = (S.set.sens + 1) % GK.SENS.length;
       GK.store.setSetting('sens', S.set.sens);
       S.matcher.setSens(GK.SENS[S.set.sens]);
+      GK.listen.setK(GK.SENS[S.set.sens].k);
       senLabel();
       GK.toast('רגישות: ' + GK.SENS[S.set.sens].name);
+    });
+    q('#p-full').addEventListener('click', function () {
+      S.set.full = !S.set.full;
+      GK.store.setSetting('full', S.set.full);
+      fullLabel(); renderHits();
+      GK.toast(S.set.full ? 'דפוס מלא: עוברים לאקורד הבא רק אחרי שמסיימים את כל הפריטות' : 'חופשי: עוברים ברגע שהאקורד נכון');
     });
     var SIZES = [18, 22, 26, 30, 34, 40];            // לחיצה על Aa עוברת לגודל הבא וחוזרת להתחלה
     q('#p-font').addEventListener('click', function () {

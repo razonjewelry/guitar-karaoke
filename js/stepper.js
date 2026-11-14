@@ -1,9 +1,8 @@
 /*
  * לוגיקת "השיר מתקדם כשמנגנים נכון":
  *  - buildSteps: רשימת האקורדים בשיר לפי הסדר (כל סימון אקורד = צעד)
- *  - createMatcher: מכונת מצבים שמקבלת פריימים מהמיקרופון ומחליטה אם האקורד היעד נוגן נכון.
- * כדי לאשר צריך: התקפה (פריטה) חדשה, המתנה קצרה שהצליל מתייצב, ואז כמה פריימים רצופים של האקורד הנכון.
- * כך גם אקורד שחוזר פעמיים ברצף דורש פריטה חדשה, וצליל שעדיין מהדהד מהאקורד הקודם לא מאשר את הבא.
+ *  - createMatcher: שופט כל פריטה (אחרי שנותחה) מול האקורד הנדרש.
+ *  - strumPositions: אילו מקומות בדפוס הפריטה הם פריטות (לא מנוחה) — לספירה ולהתקדמות בדפוס.
  */
 (function () {
   var GK = (window.GK = window.GK || {});
@@ -17,45 +16,44 @@
     return steps;
   };
 
-  // gate = עוצמה מינימלית (RMS), thr = דמיון קוסינוס מינימלי
+  /** אינדקסים של הפריטות (D/U/X) בדפוס; מנוחות ('-') לא נספרות */
+  GK.strumPositions = function (pattern) {
+    var out = [];
+    pattern.forEach(function (a, i) { if (a !== '-') out.push(i); });
+    return out;
+  };
+
+  // k = כמה מעל רצפת הרעש צריך להיות כדי להיחשב פריטה; min = דמיון מינימלי לאקורד; strong = דמיון שמספיק לאישור בפריטה אחת
   GK.SENS = [
-    { name: 'נמוכה', gate: 0.02, thr: 0.78 },
-    { name: 'רגילה', gate: 0.012, thr: 0.72 },
-    { name: 'גבוהה', gate: 0.006, thr: 0.66 }
+    { name: 'נמוכה', k: 10, min: 0.62, strong: 0.74 },
+    { name: 'רגילה', k: 6, min: 0.52, strong: 0.66 },
+    { name: 'גבוהה', k: 3.5, min: 0.45, strong: 0.58 }
   ];
+  var MARGIN = 0.02;     // הפרש מינימלי בין האקורד הכי דומה לשני
 
-  var SETTLE = 4;        // פריימים (כ-200ms) אחרי ההתקפה עד שמתחילים לספור
-  var NEED = 3;          // פריימים רצופים נכונים לאישור
-  var WRONG_NEED = 4;    // פריימים רצופים של אקורד אחר לפני שמודיעים "זה לא זה"
-
-  /** sens = אחד מ-GK.SENS. feed מחזיר {status, heard}:
-   *  quiet | idle | settling | listening | ok | wrong | confirm */
+  /**
+   * judge(analysis, target, vocab) -> {status, heard, score}
+   *  confirm = האקורד הנכון (חזק, או פעם שנייה ברצף של חלש)
+   *  maybe   = נשמע כמו הנכון אבל חלש — עוד פריטה מאשרת
+   *  wrong   = אקורד אחר מאוצר המילים של השיר
+   *  unclear = לא ברור
+   */
   GK.createMatcher = function (sens) {
-    var armed = false, since = 0, streak = 0, wrong = 0, lastEnv = 0;
+    var weak = 0, prev = null;       // prev = האקורד שאושר ממש עכשיו: פריטות נוספות שלו (בסיום הדפוס) לא נחשבות שגיאה
     return {
       setSens: function (s) { sens = s; },
-      /** מאפס את מצב ההקשבה (בכל מעבר צעד) */
-      reset: function () { armed = false; since = 0; streak = 0; wrong = 0; },
-      /** f = {env, chroma}; target = האקורד הנדרש; vocab = כל אקורדי השיר */
-      feed: function (f, target, vocab) {
-        var onset = f.env > sens.gate && f.env > lastEnv * 1.6;
-        lastEnv = f.env;
-        if (f.env <= sens.gate) { streak = 0; wrong = 0; return { status: 'quiet', heard: null }; }
-        if (onset) { armed = true; since = 0; streak = 0; wrong = 0; }
-        else if (armed) since++;
-        var res = GK.chroma.match(f.chroma, vocab);
-        var heard = res.best && res.score >= sens.thr ? res.best : null;
-        if (!armed) return { status: 'idle', heard: heard };
-        if (since < SETTLE) return { status: 'settling', heard: heard };
-        if (heard === target) {
-          streak++; wrong = 0;
-          if (streak >= NEED) { armed = false; streak = 0; return { status: 'confirm', heard: heard }; }
-          return { status: 'ok', heard: heard };
+      /** keepPrev = true במעבר אוטומטי אחרי אישור; בלי זה (קפיצה ידנית) נשכח גם האקורד הקודם */
+      reset: function (keepPrev) { weak = 0; if (!keepPrev) prev = null; },
+      judge: function (a, target, vocab) {
+        var r = GK.chroma.match(a.chroma, vocab);
+        if (!r.best || r.score < sens.min || r.score - r.second < MARGIN) { weak = 0; return { status: 'unclear', heard: null, score: r.score }; }
+        if (r.best !== target) {
+          weak = 0;
+          return { status: r.best === prev ? 'prev' : 'wrong', heard: r.best, score: r.score };
         }
-        streak = 0;
-        if (heard) { wrong++; if (wrong >= WRONG_NEED) return { status: 'wrong', heard: heard }; }
-        else wrong = 0;
-        return { status: 'listening', heard: heard };
+        if (r.score >= sens.strong || weak >= 1) { weak = 0; prev = target; return { status: 'confirm', heard: r.best, score: r.score }; }
+        weak++;
+        return { status: 'maybe', heard: r.best, score: r.score };
       }
     };
   };
