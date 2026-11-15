@@ -18,13 +18,25 @@
     maj7: [[0, 1], [4, 0.8], [7, 0.9], [11, 0.7]],
     sus4: [[0, 1], [5, 0.8], [7, 0.9]]
   };
+  // איכויות נוספות (ייבוא): ממופות לתבנית קיימת/חדשה. לא משנות את התוצאות של האיכויות הקיימות.
+  QUALITY.sus2 = [[0, 1], [2, 0.8], [7, 0.9]];
+  QUALITY.dim = [[0, 1], [3, 0.8], [6, 0.8]];
+  QUALITY.aug = [[0, 1], [4, 0.8], [8, 0.8]];
+  QUALITY['5'] = [[0, 1], [7, 0.9]];
+  QUALITY['7sus4'] = [[0, 1], [5, 0.8], [7, 0.9], [10, 0.7]];
+  QUALITY.m7b5 = [[0, 1], [3, 0.8], [6, 0.8], [10, 0.7]];
+  var ALIAS = { maj: '', M: '', min: 'm', '6': '', add9: '', '9': '7', '11': '7', '13': '7', add11: '', m6: 'm', m9: 'm7', maj9: 'maj7', M7: 'maj7', dim7: 'dim', '+': 'aug', 'sus': 'sus4', '2': 'sus2', '4': 'sus4' };
   var cache = {};
   var mod12 = function (x) { return ((x % 12) + 12) % 12; };
 
   /** "Am7" -> {root, q} ; אקורד עם בס (Am/E) נחשב לפי האקורד בלבד. null אם לא מוכר. */
   function parseChord(name) {
     var m = String(name).replace(/\/.*$/, '').match(/^([A-G])([#b]?)(.*)$/);
-    if (!m || !QUALITY[m[3]]) return null;
+    if (!m) return null;
+    var qn = m[3].replace(/\(.*\)$/, '');
+    if (!QUALITY[qn] && ALIAS[qn] !== undefined) qn = ALIAS[qn];
+    if (!QUALITY[qn]) return null;
+    m[3] = qn;
     var root = ROOT[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
     return { root: mod12(root), q: QUALITY[m[3]] };
   }

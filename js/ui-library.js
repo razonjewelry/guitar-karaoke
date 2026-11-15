@@ -10,7 +10,7 @@
       '<h3>' + esc(s.title) + (s.builtin ? '' : '<span class="badge">שלי</span>') + '</h3>' +
       (s.artist ? '<p>' + esc(s.artist) + '</p>' : '') +
       '<div class="chips">' + s.chords.map(function (c) { return '<span class="chip">' + esc(c) + '</span>'; }).join('') + '</div>' +
-      '<div class="meta">' + GK.buildSteps(s).length + ' אקורדים · <bdi>' + s.time + '</bdi>' + (s.capo ? ' · קאפו ' + s.capo : '') + '</div></a>';
+      '<div class="meta">' + GK.buildSteps(s).length + ' אקורדים · ' + (s.timeKnown || s.builtin ? '<bdi>' + s.time + '</bdi>' : 'משקל לא ידוע') + (s.capo ? ' · קאפו ' + s.capo : '') + '</div></a>';
   }
 
   function download(name, text) {
@@ -30,7 +30,7 @@
         '<div class="lib-head"><h1>🎸 קריוקי לגיטרה<small>מילים, אקורדים ופריטה — תמיד איתך</small></h1>' +
         '<input class="search" id="lib-q" type="search" placeholder="חיפוש שיר…" autocomplete="off"></div>' +
         '<div class="lib-list" id="lib-list">' + (songs.map(cardHtml).join('') || '<div class="empty">אין שירים</div>') + '</div>' +
-        '<div class="lib-foot"><a class="btn gold" href="#/edit/new">＋ שיר חדש</a>' +
+        '<div class="lib-foot"><a class="btn gold" href="#/find">🎸 חיפוש והוספת שירים</a><a class="btn" href="#/learn">🥁 לימוד פריטה</a><a class="btn" href="#/edit/new">＋ שיר חדש</a>' +
         '<button class="btn" id="lib-exp">⬇ גיבוי</button>' +
         '<label class="btn" for="lib-imp">⬆ שחזור</label><input id="lib-imp" type="file" accept=".json,application/json" hidden>' +
         '<div class="note">השירים המובנים: טקסטים בנחלת הכלל (מקרא, תפילה, המנון), עם הרמוניה בסיסית שלי. ' +

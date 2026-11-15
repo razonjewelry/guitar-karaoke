@@ -3,7 +3,7 @@
   var GK = (window.GK = window.GK || {});
 
   function show(id) {
-    ['v-library', 'v-player', 'v-editor'].forEach(function (v) {
+    ['v-library', 'v-player', 'v-editor', 'v-find', 'v-learn'].forEach(function (v) {
       document.getElementById(v).hidden = v !== id;
     });
   }
@@ -15,18 +15,34 @@
       if (!s) { location.hash = '#/'; return; }
       show('v-player');
       GK.ui.player.open(s);
+    } else if (h === '#/find') {
+      GK.ui.player.close(); GK.ui.learn.close();
+      show('v-find');
+      GK.ui.find.open();
+    } else if (h === '#/learn') {
+      GK.ui.player.close();
+      show('v-learn');
+      GK.ui.learn.open();
     } else if ((m = h.match(/^#\/edit\/(.+)$/))) {
       GK.ui.player.close();
       show('v-editor');
       GK.ui.editor.open(decodeURIComponent(m[1]));
     } else {
-      GK.ui.player.close();
+      GK.ui.player.close(); GK.ui.learn.close();
       show('v-library');
       GK.ui.library.render();
     }
     window.scrollTo(0, 0);
   }
 
+  // שיתוף לאפליקציה (Web Share Target): ?title=&text=&url= → מסך ההוספה, ואז מנקים את הכתובת
+  try {
+    var qs = new URLSearchParams(location.search);
+    if (qs.get('text') || qs.get('title') || qs.get('url')) {
+      GK.ui.find.setShare({ title: qs.get('title') || '', text: qs.get('text') || '', url: qs.get('url') || '' });
+      history.replaceState(null, '', location.pathname + '#/find');
+    }
+  } catch (e) {}
   window.addEventListener('hashchange', route);
   route();
 

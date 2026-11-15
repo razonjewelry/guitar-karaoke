@@ -29,6 +29,8 @@
     return out.join('');
   }
 
+  GK.ui.lyricsHtml = lyricsHtml;
+
   function stripHtml(song, pat) {
     return song.labels.map(function (lb, i) {
       return '<div class="slot' + (song.acc.indexOf(i) >= 0 ? ' acc' : '') + '"><span class="ar">' + ARROW[pat[i]] + '</span><span class="lb">' + lb + '</span></div>';
@@ -97,6 +99,9 @@
       S.lines[L].classList.toggle('cur', cur !== null && L === curLine);
     }
     S.step.textContent = Math.min(i + 1, n) + '/' + n;
+    S.now.textContent = cur ? cur.chord : '—';
+    S.nxt.textContent = S.steps[i + 1] ? S.steps[i + 1].chord : '—';
+    if (S.song.id) GK.store.setSongPref(S.song.id, 'step', i);
     S.matcher.reset(keepPrev);
     if (cur) {
       setChord(cur.chord);
@@ -143,6 +148,15 @@
   function onResult(r) {
     if (!S || !S.listening) return;
     setLevel(r.level);
+    S.calls++;
+    if (S.coach && S.coach.gated()) return;          // בזמן הסבר קולי / ספירה מקדימה לא מקשיבים (הרמקול יישמע במיקרופון)
+    if (S.coach && S.coach.isActive() && GK.sound.ctx()) {
+      var streamMs = (S.calls * 512 / S.sr) * 1000;
+      r.onsets.forEach(function (o) {
+        var age = Math.max(0, Math.min(400, streamMs - o.t));
+        S.coach.feedOnset(GK.sound.now() - age / 1000 - 0.03);
+      });
+    }
     r.onsets.forEach(function (o) {                // כל פריטה נספרת מיד, לפני שהאקורד נותח
       S.stepOnsets.push(o.idx);
       S.total++;
@@ -175,8 +189,10 @@
   function startListen() {
     if (S.idx >= S.steps.length) setStep(0);
     S.playBtn.disabled = true;
-    GK.listen.start(onResult, GK.SENS[S.set.sens].k).then(function () {
+    GK.sound.ensure();
+    GK.listen.start(onResult, GK.SENS[S.set.sens].k).then(function (sr) {
       if (!S) { GK.listen.stop(); return; }
+      S.sr = sr || 16000; S.calls = 0;
       S.listening = true;
       S.playBtn.disabled = false;
       S.matcher.reset();
@@ -204,6 +220,7 @@
   function close() {
     if (!S) return;
     GK.listen.stop();
+    if (S.coach) S.coach.destroy();
     document.removeEventListener('visibilitychange', S.onHide);
     S.root.innerHTML = '';
     S = null;
@@ -215,7 +232,7 @@
     var set = GK.store.settings();
     var steps = GK.buildSteps(song);
     var first = song.lines[0] ? song.lines[0].strum : ['-'];
-    var meta = '<bdi>' + song.time + '</bdi>' + (song.capo ? ' · קאפו ' + song.capo : '') + (song.artist ? ' · ' + esc(song.artist) : '');
+    var meta = (song.timeKnown || song.builtin ? '<bdi>' + song.time + '</bdi>' : 'משקל לא ידוע') + (song.capo ? ' · קאפו ' + song.capo : '') + (song.artist ? ' · ' + esc(song.artist) : '');
 
     root.innerHTML =
       '<header class="p-top"><a class="btn icon" href="#/" aria-label="חזרה">→</a>' +
@@ -224,7 +241,8 @@
       '<div class="chordbar" id="p-chords">' + song.chords.map(function (c) {
         return '<div class="cc" data-c="' + esc(c) + '">' + GK.chordSvg(c) + '<span>' + esc(c) + '</span></div>';
       }).join('') + '</div>' +
-      '<div class="strumbar"><span class="lab">פריטה</span><div class="slots" id="p-slots">' + stripHtml(song, first) + '</div></div>' +
+      '<div class="nownext"><div>עכשיו <b id="p-now">—</b></div><div>הבא <b id="p-next">—</b></div></div>' +
+      '<details class="p-coach" id="p-coachbox" open><summary>🥁 מאמן הפריטה</summary><div id="p-coach"></div></details>' +
       '<div class="status"><span class="step" id="p-step">0/' + steps.length + '</span><span class="hint" id="p-hint"></span><span class="heard" id="p-heard">🎤 —</span></div>' +
       '<div class="status2"><i class="lvl" title="עוצמת המיקרופון"><b id="p-lvl"></b></i><span class="cnt" id="p-cnt">פריטות: 0</span>' +
       '<button class="btn tog" id="p-full" aria-label="מצב דפוס"></button></div>' +
@@ -240,17 +258,26 @@
     S = {
       song: song, root: root, set: set, steps: steps, idx: 0, listening: false, chordOk: false, confirmIdx: 0, stepOnsets: [], total: 0, pos: [],
       lyr: q('#p-lyrics'), bar: q('#p-chords'), playBtn: q('#p-play'), hint: q('#p-hint'), heard: q('#p-heard'), step: q('#p-step'),
-      cnt: q('#p-cnt'), lvl: q('#p-lvl'),
+      cnt: q('#p-cnt'), lvl: q('#p-lvl'), now: q('#p-now'), nxt: q('#p-next'), calls: 0, sr: 16000,
       slots: root.querySelectorAll('#p-slots .slot'), cards: {}, lines: [], segEls: [],
       patKey: first.join(''), curChord: null, matcher: GK.createMatcher(GK.SENS[set.sens] || GK.SENS[1])
     };
     S.pos = GK.strumPositions(first);
+    var prefs = GK.store.songPrefs(song.id);
+    var verified = (song.strumVerified && song.strumDeclared) ? GK.pat.fromLegacy(first, song.time, 'verified', 'src-' + song.id, 'פריטת המקור') : null;
+    S.coach = GK.ui.createCoach(q('#p-coach'), {
+      mode: 'song', meter: song.timeKnown ? song.time : (prefs.time || '4/4'), timeKnown: song.timeKnown, verified: verified,
+      patternId: prefs.patternId,
+      onPattern: function (p) { GK.store.setSongPref(song.id, 'patternId', p.id); },
+      onMeter: function (m) { GK.store.setSongPref(song.id, 'time', m); },
+      onPhase: function (ph) { if (ph === 'idle') setHint(S.steps[S.idx] ? 'נגן: <b>' + esc(S.steps[S.idx].chord) + '</b>' : ''); else if (ph === 'explain') setHint('מקשיבים להסבר…'); else if (ph === 'count') setHint('ספירה…'); }
+    });
     Array.prototype.forEach.call(root.querySelectorAll('.cc'), function (c) { S.cards[c.getAttribute('data-c')] = c; });
     Array.prototype.forEach.call(S.lyr.querySelectorAll('.ln'), function (ln) {
       S.lines.push(ln);
       S.segEls.push(ln.querySelectorAll('.seg'));
     });
-    S.onHide = function () { if (document.hidden && S && S.listening) stopListen(); };   // חוסך סוללה ופרטיות
+    S.onHide = function () { if (document.hidden && S) { if (S.listening) stopListen(); if (S.coach) S.coach.stop(); } };   // חוסך סוללה ופרטיות
     document.addEventListener('visibilitychange', S.onHide);
 
     var senLabel = function () { q('#p-sens').textContent = '🎚 ' + GK.SENS[S.set.sens].name; };
@@ -295,9 +322,9 @@
       } else location.hash = '#/edit/' + encodeURIComponent(song.id);
     });
 
-    if (steps.length) setStep(0);
+    if (steps.length) setStep(Math.min(prefs.step || 0, steps.length - 1));
     else setHint('אין אקורדים בשיר הזה', 'warn');
   }
 
-  GK.ui.player = { open: open, close: close, isPlaying: function () { return !!(S && S.listening); } };
+  GK.ui.player = { open: open, close: close, isPlaying: function () { return !!(S && (S.listening || (S.coach && S.coach.isActive()))); } };
 })();
