@@ -242,7 +242,7 @@
         return '<div class="cc" data-c="' + esc(c) + '">' + GK.chordSvg(c) + '<span>' + esc(c) + '</span></div>';
       }).join('') + '</div>' +
       '<div class="nownext"><div>עכשיו <b id="p-now">—</b></div><div>הבא <b id="p-next">—</b></div></div>' +
-      '<details class="p-coach" id="p-coachbox" open><summary>🥁 מאמן הפריטה</summary><div id="p-coach"></div></details>' +
+      '<details class="p-coach" id="p-coachbox"><summary><span>🥁 מאמן פריטה ▾</span><span class="co-mini" id="p-mini" dir="ltr"></span></summary><div id="p-coach"></div></details>' +
       '<div class="status"><span class="step" id="p-step">0/' + steps.length + '</span><span class="hint" id="p-hint"></span><span class="heard" id="p-heard">🎤 —</span></div>' +
       '<div class="status2"><i class="lvl" title="עוצמת המיקרופון"><b id="p-lvl"></b></i><span class="cnt" id="p-cnt">פריטות: 0</span>' +
       '<button class="btn tog" id="p-full" aria-label="מצב דפוס"></button></div>' +
@@ -266,6 +266,7 @@
     var prefs = GK.store.songPrefs(song.id);
     var verified = (song.strumVerified && song.strumDeclared) ? GK.pat.fromLegacy(first, song.time, 'verified', 'src-' + song.id, 'פריטת המקור') : null;
     S.coach = GK.ui.createCoach(q('#p-coach'), {
+      mini: q('#p-mini'),
       mode: 'song', meter: song.timeKnown ? song.time : (prefs.time || '4/4'), timeKnown: song.timeKnown, verified: verified,
       patternId: prefs.patternId,
       onPattern: function (p) { GK.store.setSongPref(song.id, 'patternId', p.id); },

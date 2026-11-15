@@ -92,7 +92,12 @@
           '<span class="sy">' + GK.pat.SYM[s.action] + '</span><span class="lb">' + GK.pat.beatLabel(pattern, s) + '</span></div>';
       }).join('');
     }
+    function drawMini() {
+      if (!o.mini) return;
+      o.mini.innerHTML = pattern.steps.map(function (s) { return '<i class="a-' + s.action + '" style="flex:' + s.durationBeats + ' 1 0">' + GK.pat.SYM[s.action] + '</i>'; }).join('');
+    }
     function drawPattern() {
+      drawMini();
       el.row.innerHTML = rowHtml();
       el.badge.textContent = GK.pat.SOURCE_LABEL[pattern.source] || '';
       el.badge.className = 'co-badge s-' + pattern.source;
@@ -115,6 +120,7 @@
     }
     function paint(i, cls) {
       var cells = el.row.children;
+      if (o.mini) for (var m = 0; m < o.mini.children.length; m++) o.mini.children[m].classList.toggle('on', m === i);
       for (var k = 0; k < cells.length; k++) {
         cells[k].classList.toggle('on', k === i);
         if (cls !== undefined) cells[k].classList.toggle('manual', cls && k === i);
