@@ -9,7 +9,7 @@ GK.BUILTIN = [
 {artist: נפתלי הרץ אימבר · לחן מסורתי}
 {bpm: 66}
 {time: 4/4}
-{strum: D - D U D - D U}
+{strum: D - - - D - - -}
 {bars: 2}
 {section: בית}
 [Em]כל עוד בלבב [Am]פנימה

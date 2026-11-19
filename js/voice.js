@@ -60,7 +60,26 @@
     },
     /** מילה בודדת (ספירה מקדימה): לא מבטל הקראה שכבר רצה אחרי מילה קודמת, כדי שלא יצטברו */
     say: function (word, o) { return V.speak(word, { rate: (o && o.rate) || 1, queue: false }); },
-    speakPattern: function (pattern, o) { return V.speak(GK.pat.speechText(pattern), o); },
-    cancel: function () { env(); try { if (synth) synth.cancel(); } catch (e) {} V.speaking = false; }
+    /** מקריא את הדפוס בקצב הפריטה: כל מילה בזמן של הצעד שלה (לפי BPM). o.bpm — אם חסר, מקריא ברצף. התזמון המוזיקלי עצמו לא תלוי בקול. */
+    speakPattern: function (pattern, o) {
+      o = o || {};
+      if (!o.bpm) return V.speak(GK.pat.speechText(pattern), o);
+      env();
+      if (!V.available()) return Promise.resolve({ ok: false, reason: 'unavailable' });
+      var pulse = GK.pat.meterOf(pattern).pulse, secPerUnit = 60 / (o.bpm * pulse), steps = pattern.steps, token = (V._tk = (V._tk || 0) + 1);
+      return new Promise(function (resolve) {
+        var bad = null, last = steps.length ? steps[steps.length - 1].beat * secPerUnit : 0;
+        try { synth.cancel(); } catch (e) {}
+        steps.forEach(function (s, i) {
+          var gap = ((steps[i + 1] ? steps[i + 1].beat : pattern.beatsPerBar) - s.beat) * secPerUnit;
+          setTimeout(function () {
+            if (V._tk !== token) return;
+            V.speak(GK.pat.WORD[s.action], { rate: gap < 0.35 ? 1.6 : gap < 0.6 ? 1.3 : 1.05, queue: false }).then(function (r) { if (!r.ok && !bad) bad = r.reason; });
+          }, s.beat * secPerUnit * 1000);
+        });
+        setTimeout(function () { if (V._tk === token) resolve({ ok: !bad, reason: bad }); }, (last + 0.9) * 1000);
+      });
+    },
+    cancel: function () { V._tk = (V._tk || 0) + 1; env(); try { if (synth) synth.cancel(); } catch (e) {} V.speaking = false; }
   });
 })();

@@ -98,6 +98,8 @@
     P.fromGrid('offbeat-ups', 'רק למעלה על חצאי הפעימה', '4/4', 0.5, ['X', 'U', 'X', 'U', 'X', 'U', 'X', 'U']),
     P.fromGrid('sparse-rests', 'דלילה עם מנוחות', '4/4', 0.5, ['D', 'X', 'X', 'U', 'D', 'X', 'X', 'U']),
     P.fromGrid('one-per-bar', 'למטה פעם בתיבה', '4/4', 1, ['>D', 'X', 'X', 'X']),
+    P.fromGrid('ballad-halves', 'בלדה: פריטה כל שתי פעימות', '4/4', 1, ['>D', 'X', 'D', 'X']),
+    P.fromGrid('ballad-soft', 'בלדה רכה', '4/4', 0.5, ['>D', 'X', 'X', 'X', 'D', 'X', 'D', 'U']),
     P.fromGrid('waltz-basic', 'ואלס: שלוש למטה', '3/4', 1, ['>D', 'D', 'D']),
     P.fromGrid('waltz-rest', 'ואלס עם מנוחה', '3/4', 0.5, ['D', 'X', 'D', 'U', 'D', 'U']),
     P.fromGrid('six-eight-basic', 'שש־שמיניות בסיסי', '6/8', 1, ['D', 'X', 'U', 'D', 'X', 'U']),

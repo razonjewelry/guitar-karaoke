@@ -49,7 +49,7 @@
           setPhase('explain');
           if (hooks.onCaption) hooks.onCaption(GK.pat.speechText(p));
           await voice.ready();
-          var r = await voice.speakPattern(p, { rate: S.voiceRate });
+          var r = await voice.speakPattern(p, { rate: S.voiceRate, bpm: S.bpm });
           if (tk !== token) return false;
           if (!r.ok && hooks.onVoiceProblem) hooks.onVoiceProblem(r.reason);
         }
@@ -79,7 +79,7 @@
         if (hooks.onCaption) hooks.onCaption(GK.pat.speechText(p));
         var tk = ++token;
         await voice.ready();
-        var r = await voice.speakPattern(p, { rate: S.voiceRate });
+        var r = await voice.speakPattern(p, { rate: S.voiceRate, bpm: S.bpm });
         if (tk === token && phase === 'explain') setPhase('idle');
         return r;
       }

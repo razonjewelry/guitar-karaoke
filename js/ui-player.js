@@ -195,30 +195,58 @@
   }
   GK.ytId = ytId;
   function videoUrl() { return (GK.store.songPrefs(S.song.id).video) || S.song.video || ''; }
+  var PIPED = ['https://api.piped.private.coffee', 'https://pipedapi.kavin.rocks'];
+  /** חיפוש אוטומטי ביוטיוב דרך ממשק חיפוש ציבורי (Piped, פתוח לקריאה מדפדפן). מחזיר Promise<[{id,title}]>; ריק אם אין תוצאה/שירות */
+  function findVideos(q) {
+    var i = 0;
+    function next() {
+      if (i >= PIPED.length) return Promise.resolve([]);
+      var base = PIPED[i++], ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 9000);
+      return fetch(base + '/search?q=' + encodeURIComponent(q) + '&filter=videos', { signal: ctl.signal }).then(function (r) { clearTimeout(t); return r.ok ? r.json() : null; }, function () { clearTimeout(t); return null; }).then(function (d) {
+        var items = d && d.items ? d.items.map(function (x) { var m = /v=([\w-]{11})/.exec(x.url || ''); return m ? { id: m[1], title: x.title || '' } : null; }).filter(Boolean) : [];
+        return items.length ? items.slice(0, 6) : next();
+      });
+    }
+    return next();
+  }
+  GK.findVideos = findVideos;
+  function videoQuery() { var a = S.song.builtin ? '' : (S.song.artist || ''); return (S.song.title + ' ' + a).trim(); }
+  function showEmbed(box, id, results, k) {
+    box.hidden = false;
+    box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + id + '?playsinline=1" title="השיר המקורי" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>' +
+      '<div class="pv-act"><span>המיקרופון כבוי בזמן ההאזנה.</span>' + (results && results.length > 1 ? '<button class="btn" id="pv-next">לא זה? הבא</button>' : '') + '<button class="btn" id="pv-redo">🔄 חפש אחר</button><button class="btn" id="pv-close">סגור</button></div>';
+    box.querySelector('#pv-redo').addEventListener('click', function () { S.skipVid = id; GK.store.setSongPref(S.song.id, 'video', ''); S.song.video = ''; box.hidden = true; box.innerHTML = ''; toggleVideo(); });
+    box.querySelector('#pv-close').addEventListener('click', function () { box.hidden = true; box.innerHTML = ''; });
+    var nx = box.querySelector('#pv-next');
+    if (nx) nx.addEventListener('click', function () { var n = (k + 1) % results.length; GK.store.setSongPref(S.song.id, 'video', 'https://youtu.be/' + results[n].id); showEmbed(box, results[n].id, results, n); });
+  }
+  function manualBox(box, why) {
+    var q = encodeURIComponent(videoQuery());
+    box.hidden = false;
+    box.innerHTML = '<div class="pv-none">' + why + '</div><a class="btn" target="_blank" rel="noopener noreferrer" href="https://www.youtube.com/results?search_query=' + q + '">🔍 חפש ביוטיוב</a>' +
+      '<input class="search" id="pv-in" placeholder="הדבק כאן קישור מיוטיוב" dir="ltr"><button class="btn gold" id="pv-save">שמור</button>';
+    box.querySelector('#pv-save').addEventListener('click', function () {
+      var v = box.querySelector('#pv-in').value.trim();
+      if (!ytId(v)) { GK.toast('זה לא נראה כמו קישור ליוטיוב'); return; }
+      GK.store.setSongPref(S.song.id, 'video', v); showEmbed(box, ytId(v), null, 0);
+    });
+  }
   function toggleVideo() {
     var box = S.root.querySelector('#p-video');
     if (!box.hidden) { box.hidden = true; box.innerHTML = ''; return; }
     if (S.listening) stopListen();
     if (S.coach) S.coach.stop();
     var id = ytId(videoUrl());
-    if (!id) {
-      var q = encodeURIComponent(S.song.title + (S.song.artist ? ' ' + S.song.artist : ''));
-      box.hidden = false;
-      box.innerHTML = '<div class="pv-none">אין עדיין קישור לשיר הזה.</div>' +
-        '<a class="btn" target="_blank" rel="noopener noreferrer" href="https://www.youtube.com/results?search_query=' + q + '">🔍 חפש ביוטיוב</a>' +
-        '<input class="search" id="pv-in" placeholder="הדבק כאן קישור מיוטיוב" dir="ltr"><button class="btn gold" id="pv-save">שמור</button>';
-      box.querySelector('#pv-save').addEventListener('click', function () {
-        var v = box.querySelector('#pv-in').value.trim();
-        if (!ytId(v)) { GK.toast('זה לא נראה כמו קישור ליוטיוב'); return; }
-        GK.store.setSongPref(S.song.id, 'video', v); box.hidden = true; box.innerHTML = ''; toggleVideo();
-      });
-      return;
-    }
-    box.hidden = false;
-    box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + id + '?playsinline=1" title="השיר המקורי" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>' +
-      '<div class="pv-act"><span>המיקרופון כבוי בזמן ההאזנה.</span><button class="btn" id="pv-change">החלף קישור</button><button class="btn" id="pv-close">סגור</button></div>';
-    box.querySelector('#pv-close').addEventListener('click', function () { box.hidden = true; box.innerHTML = ''; });
-    box.querySelector('#pv-change').addEventListener('click', function () { GK.store.setSongPref(S.song.id, 'video', ''); box.hidden = true; box.innerHTML = ''; S.song.video = ''; toggleVideo(); });
+    if (id) { showEmbed(box, id, null, 0); return; }
+    box.hidden = false; box.innerHTML = '<div class="pv-none">🔎 מחפש את השיר ביוטיוב…</div>';
+    var sid = S.song.id;
+    findVideos(videoQuery()).then(function (res) {
+      if (!S || S.song.id !== sid || box.hidden) return;
+      if (!res.length) { manualBox(box, 'לא הצלחתי למצוא אוטומטית (השירות לא זמין כרגע).'); return; }
+      var k = 0; if (S.skipVid) { for (var z = 0; z < res.length; z++) if (res[z].id === S.skipVid) k = (z + 1) % res.length; S.skipVid = null; }
+      GK.store.setSongPref(sid, 'video', 'https://youtu.be/' + res[k].id);
+      showEmbed(box, res[k].id, res, k);
+    });
   }
 
   function startListen() {
