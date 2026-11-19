@@ -129,6 +129,7 @@
     flash(S.segEls[st.line][st.seg], 'just');
     if (S.cards[st.chord]) flash(S.cards[st.chord], 'flash');
     if (navigator.vibrate) navigator.vibrate(35);
+    S.lastAdv = S.pendingT !== undefined ? S.pendingT : S.lastAdv;
     var carry = S.set.full ? [] : S.stepOnsets.filter(function (i) { return i > S.confirmIdx; });   // פריטות שכבר שייכות לאקורד הבא
     if (S.idx + 1 >= S.steps.length) { if (S.song.id) GK.store.setSongPref(S.song.id, 'done', Date.now()); setStep(S.steps.length); stopListen(); GK.toast('סיימת את השיר 🎸'); }
     else setStep(S.idx + 1, carry, true);
@@ -166,7 +167,8 @@
     r.analyses.forEach(function (a) {
       var st = S.steps[S.idx];
       if (!st || !S.listening) return;
-      var j = S.matcher.judge(a, st.chord, S.song.chords);
+      if (S.lastAdv !== undefined && a.t - S.lastAdv < 350) return;          // זנב הצליל של האקורד הקודם — לא פריטה חדשה
+      var j = S.matcher.judge(a, st.chord, S.song.chords, S.steps[S.idx - 1] ? S.steps[S.idx - 1].chord : null);
       if (j.status === 'prev') {                   // פריטה נוספת של האקורד הקודם: לא שייכת לצעד הזה, לא נספרת בו
         S.stepOnsets = S.stepOnsets.filter(function (i) { return i !== a.idx; });
         renderHits();
@@ -174,7 +176,7 @@
         return;
       }
       setHeard(j.heard, st.chord, j.score);
-      if (j.status === 'confirm') { S.chordOk = true; S.confirmIdx = a.idx; maybeAdvance(); }
+      if (j.status === 'confirm') { S.chordOk = true; S.confirmIdx = a.idx; S.pendingT = a.t; maybeAdvance(); }
       else if (j.status === 'maybe') setHint('כמעט… עוד פריטה של <b>' + esc(st.chord) + '</b>');
       else if (j.status === 'wrong') setHint('שמעתי <b>' + esc(j.heard) + '</b> — צריך <b>' + esc(st.chord) + '</b>', 'warn');
     });
@@ -283,7 +285,7 @@
       '<button class="btn tog" id="p-full" aria-label="מצב דפוס"></button></div><div class="p-video" id="p-video" hidden></div>' +
       '<div class="lwrap"><div class="lyrics" id="p-lyrics">' + lyricsHtml(song) + '</div></div>' +
       '<footer class="dock"><button class="play" id="p-play">🎤 התחל</button>' +
-      '<button class="btn" id="p-back" aria-label="אקורד קודם">⏮</button>' +
+      '<button class="btn" id="p-restart" aria-label="התחל מההתחלה">↺ מההתחלה</button><button class="btn" id="p-back" aria-label="אקורד קודם">⏮</button>' +
       '<button class="btn" id="p-skip" aria-label="דלג על האקורד">⏭</button>' +
       '<button class="btn tog" id="p-sens" aria-label="רגישות המיקרופון"></button>' +
       '<button class="btn tog" id="p-font" aria-label="גודל גופן">Aa</button></footer>';
@@ -326,6 +328,11 @@
       if (ln) jumpToLine(parseInt(ln.getAttribute('data-i'), 10));
     });
     S.playBtn.addEventListener('click', function () { if (S.listening) stopListen(); else startListen(); });
+    q('#p-restart').addEventListener('click', function () {
+      if (S.coach) S.coach.stop();
+      S.matcher.reset(false); S.lastAdv = -1e9;
+      setStep(0); GK.toast('מההתחלה');
+    });
     q('#p-back').addEventListener('click', function () { setStep(Math.max(0, Math.min(S.idx, S.steps.length) - 1)); });
     q('#p-skip').addEventListener('click', function () { if (S.idx < S.steps.length) setStep(S.idx + 1); });
     q('#p-sens').addEventListener('click', function () {

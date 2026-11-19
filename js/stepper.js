@@ -29,7 +29,13 @@
     { name: 'רגילה', k: 6, min: 0.52, strong: 0.66 },
     { name: 'גבוהה', k: 3.5, min: 0.45, strong: 0.58 }
   ];
-  var MARGIN = 0.02;     // הפרש מינימלי בין האקורד הכי דומה לשני
+  var MARGIN = 0.02;
+  function pcs(n) { var p = GK.chroma.parseChord(n); return p ? p.q.map(function (e) { return (p.root + e[0]) % 12; }) : []; }
+  function shares(x, y) {
+    var A = pcs(x), B = pcs(y), n = 0;
+    A.forEach(function (p) { if (B.indexOf(p) >= 0) n++; });
+    return n;
+  }     // הפרש מינימלי בין האקורד הכי דומה לשני
 
   /**
    * judge(analysis, target, vocab) -> {status, heard, score}
@@ -44,14 +50,16 @@
       setSens: function (s) { sens = s; },
       /** keepPrev = true במעבר אוטומטי אחרי אישור; בלי זה (קפיצה ידנית) נשכח גם האקורד הקודם */
       reset: function (keepPrev) { weak = 0; if (!keepPrev) prev = null; },
-      judge: function (a, target, vocab) {
+      judge: function (a, target, vocab, before) {
         var r = GK.chroma.match(a.chroma, vocab);
         if (!r.best || r.score < sens.min || r.score - r.second < MARGIN) { weak = 0; return { status: 'unclear', heard: null, score: r.score }; }
         if (r.best !== target) {
           weak = 0;
           return { status: r.best === prev ? 'prev' : 'wrong', heard: r.best, score: r.score };
         }
-        if (r.score >= sens.strong || weak >= 1) { weak = 0; prev = target; return { status: 'confirm', heard: r.best, score: r.score }; }
+        // אקורד שחולק צלילים עם הקודם (G/Em, C/Am…) נשמע דומה כשהקודם עוד מצלצל: דורשים התאמה חזקה, לא "חלשה פעמיים"
+        var close = before && before !== target && shares(before, target) >= 2;
+        if (r.score >= sens.strong || (weak >= 1 && !close)) { weak = 0; prev = target; return { status: 'confirm', heard: r.best, score: r.score }; }
         weak++;
         return { status: 'maybe', heard: r.best, score: r.score };
       }
