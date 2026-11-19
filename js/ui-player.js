@@ -139,6 +139,12 @@
   function maybeAdvance() {
     if (!S.chordOk) return;
     var need = S.pos.length;
+    // אותו אקורד פעמיים ברצף (סוף שורה + תחילת הבאה): אי אפשר להבדיל "המשכתי" מ"עברתי", אז דורשים פריטות כמו בדפוס
+    var dup = S.idx > 0 && S.steps[S.idx - 1] && S.steps[S.idx - 1].chord === S.steps[S.idx].chord;
+    if (dup && need && S.stepOnsets.length < need) {
+      setHint('<b>' + esc(S.steps[S.idx].chord) + '</b> שוב — המשך לפרוט (' + S.stepOnsets.length + '/' + need + ')', 'ok');
+      return;
+    }
     if (S.set.full && need && S.stepOnsets.length < need) {
       setHint('✓ <b>' + esc(S.steps[S.idx].chord) + '</b> — השלם את הדפוס (' + S.stepOnsets.length + '/' + need + ')', 'ok');
       return;
@@ -283,6 +289,7 @@
 
   function close() {
     if (!S) return;
+    GK.chroma.setCapo(0);
     GK.listen.stop();
     if (S.coach) S.coach.destroy();
     document.removeEventListener('visibilitychange', S.onHide);
@@ -295,6 +302,9 @@
     var root = document.getElementById('v-player');
     var set = GK.store.settings();
     var steps = GK.buildSteps(song);
+    var prefs0 = GK.store.songPrefs(song.id);
+    var capoNow = prefs0.capo !== undefined ? prefs0.capo : (song.capo || 0);
+    GK.chroma.setCapo(capoNow);
     var first = song.lines[0] ? song.lines[0].strum : ['-'];
     var meta = (song.timeKnown || song.builtin ? '<bdi>' + song.time + '</bdi>' : 'משקל לא ידוע') + (song.capo ? ' · קאפו ' + song.capo : '') + (song.artist ? ' · ' + esc(song.artist) : '');
 
@@ -311,6 +321,7 @@
       '<div class="p-tools" id="p-tools" hidden>' +
       '<button class="btn" id="p-hear" aria-label="שמע איך הפריטה נשמעת">🔊 שמע פריטה</button><button class="btn" id="p-vid" aria-label="השיר המקורי ביוטיוב">🎬 שיר מקורי</button>' +
       '<button class="btn tog" id="p-full" aria-label="מצב דפוס"></button><button class="btn tog" id="p-sens" aria-label="רגישות המיקרופון"></button><button class="btn tog" id="p-font" aria-label="גודל גופן">Aa</button>' +
+      '<span class="pill" dir="ltr"><button id="p-capo-" aria-label="קאפו פחות">−</button><span id="p-capo">קאפו ' + capoNow + '</span><button id="p-capo+" aria-label="קאפו יותר">＋</button></span>' +
       '<span class="cnt" id="p-cnt">פריטות: 0</span><i class="lvl" title="עוצמת המיקרופון"><b id="p-lvl"></b></i></div>' +
       '<div class="p-video" id="p-video" hidden></div>' +
       '<div class="lwrap"><div class="lyrics" id="p-lyrics">' + lyricsHtml(song) + '</div></div>' +
@@ -357,6 +368,14 @@
       if (ln) jumpToLine(parseInt(ln.getAttribute('data-i'), 10));
     });
     S.playBtn.addEventListener('click', function () { if (S.listening) stopListen(); else startListen(); });
+    function setCapo(n) {
+      n = Math.max(0, Math.min(11, n)); capoNow = n; GK.chroma.setCapo(n);
+      GK.store.setSongPref(song.id, 'capo', n); q('#p-capo').textContent = 'קאפו ' + n;
+      if (S.matcher) S.matcher.reset(false);
+      GK.toast(n ? 'קאפו ' + n + ': המיקרופון מצפה לצליל גבוה ב-' + n + ' חצאי טון מצורת האקורד' : 'בלי קאפו');
+    }
+    q('#p-capo-').addEventListener('click', function () { setCapo(capoNow - 1); });
+    q('#p-capo\+').addEventListener('click', function () { setCapo(capoNow + 1); });
     q('#p-more').addEventListener('click', function () { var t = q('#p-tools'); t.hidden = !t.hidden; q('#p-more').classList.toggle('on', !t.hidden); });
     q('#p-restart').addEventListener('click', function () {
       if (S.coach) S.coach.stop();

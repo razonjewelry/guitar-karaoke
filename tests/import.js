@@ -52,6 +52,28 @@ ok(GK.parseSong(r6.song).lines[0].segs[0].c === 'Am' || GK.parseSong(r6.song).li
   const cps = GK.parseSong(cp.song);
   ok(cps.title === 'Test Song' && cps.chords.join() === 'C,G,Am,F', 'ChordPro בתוך השורה עובר כמו שהוא: ' + cps.chords.join());
 }
+// אקורדים שנדבקו למילים (העתקה מ-chordie בטלפון): "AmWalking", "F#cool", "DI saw"
+{
+  const glued = ['strum d/d/u/u/d/u', 'Intro: Am - G - F - E (2X)', 'AmWalking down the river, F#cool wind tonight',
+    'GUp along the valley, Erising with the light', 'DI saw a quiet morning, CStill and California', 'EmMy song is never ending'].join('\n');
+  const g = GK.importPaste(glued, { title: 'Glue test' });
+  const gs = GK.parseSong(g.song);
+  ok(gs.chords.join() === 'Am,G,F,E,F#,D,C,Em', 'אקורדים דבוקים הופרדו: ' + gs.chords.join());
+  ok(/\[Am\]Walking/.test(g.song) && /\[F#\]cool/.test(g.song) && /\[D\]I saw/.test(g.song) && /\[E\]rising/.test(g.song), 'מיקום מדויק בתחילת המילה');
+  ok(/California/.test(g.song) && !/\[C\]alifornia/.test(g.song), '"California" לא פוצל (שם פרטי)' );
+  ok(/פריטה לפי המקור: ↓ ↓ ↑ ↑ ↓ ↑/.test(g.song), 'שורת strum נקלטה כהערה ולא ככותרת');
+  ok(gs.title === 'Glue test', 'כותרת מהשדה');
+  const heb = GK.importPaste('Amשלום לך ילדה Gקטנה ויפה\nFהנה בא Eהבוקר\nAmועוד שורה', {});
+  ok(GK.parseSong(heb.song).chords.join() === 'Am,G,F,E', 'אקורדים דבוקים לעברית: ' + GK.parseSong(heb.song).chords.join());
+  const plain = GK.importPaste('Every day I see the sun\nAnd Grace is in the garden', {});
+  ok(GK.parseSong(plain.song).chords.length === 0, 'טקסט רגיל בלי אקורדים לא מפוצל (Every, And, Grace)');
+}
+// קאפו: אקורד G עם קאפו 2 נשמע כמו A
+{
+  GK.chroma.setCapo(0); const a0 = GK.chroma.template('A'); GK.chroma.setCapo(2); const g2 = GK.chroma.template('G'); GK.chroma.setCapo(0);
+  ok(a0.every((x, i) => Math.abs(x - g2[i]) < 1e-9), 'קאפו 2: תבנית G = תבנית A');
+  ok(GK.chroma.getCapo() === 0, 'קאפו חוזר ל-0');
+}
 // כתובת חיפוש
 ok(GK.tab4uSearchUrl('אמן שיר').startsWith('https://www.tab4u.com/resultsSimple?tab=songs&q=%D7'), 'כתובת חיפוש Tab4U');
 console.log(pass + ' passed, ' + fail + ' failed');

@@ -42,16 +42,18 @@
   }
 
   /** וקטור תבנית מנורמל (12) לאקורד, או null */
+  var CAPO = 0;                                   // קאפו: האקורדים בשיר הם צורות ביד, והצליל בפועל גבוה ב-CAPO חצאי טון
   function template(name) {
-    if (cache[name] !== undefined) return cache[name];
+    var key = name + '@' + CAPO;
+    if (cache[key] !== undefined) return cache[key];
     var p = parseChord(name), t = null;
     if (p) {
       var v = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-      p.q.forEach(function (x) { v[(p.root + x[0]) % 12] = x[1]; });
+      p.q.forEach(function (x) { v[(p.root + x[0] + CAPO) % 12] = x[1]; });
       var n = Math.sqrt(v.reduce(function (a, b) { return a + b * b; }, 0));
       t = v.map(function (x) { return x / n; });
     }
-    cache[name] = t;
+    cache[key] = t;
     return t;
   }
 
@@ -120,5 +122,5 @@
     return out;
   }
 
-  GK.chroma = { parseChord: parseChord, template: template, fromMag: fromMag, fromSamples: fromSamples, match: match };
+  GK.chroma = { setCapo: function (n) { CAPO = ((parseInt(n, 10) || 0) % 12 + 12) % 12; }, getCapo: function () { return CAPO; }, parseChord: parseChord, template: template, fromMag: fromMag, fromSamples: fromSamples, match: match };
 })();

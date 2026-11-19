@@ -56,6 +56,113 @@
     var only = t.split('\n').filter(function (l) { return chordLine(l); }).length;
     return only < 2;
   }
+  // ───── עיבוד מקדים חכם: פריטה מהמקור, שורות "Intro: Am - G", ואקורדים שנדבקו למילים ─────
+  var CH_RE = '[A-G](?:#|b)?(?:maj7|maj9|maj|m7b5|m7|m9|m6|m|7sus4|sus2|sus4|sus|dim7|dim|aug|add9|add|6|7|9|11|13|5)?(?:\/[A-G](?:#|b)?)?';
+  var GLUE = new RegExp('^(' + CH_RE + ')(.+)$');
+  var LABEL = /^\s*(intro|outro|interlude|instrumental|solo|verse|chorus|bridge|pre-?chorus|ending|פתיחה|סיום|מעבר|סולו|פזמון|בית)\s*\d*\s*[:\-–]\s*(.+)$/i;
+  var COMMON = {};
+  ('the and to of in is it you that he was for on are with as his they be at one have this from or had by but what all were we when your can said there an each ' +
+   'which she do how their if will up out many then them these so some her would make like him into time has look two more go see no way could my me than first been ' +
+   'call who its now find long down day did get come made may part over new love heart night light know never away again home feel baby say just only still where here ' +
+   'round through old cold sweet blue sky eyes life world dream rain sun moon road soul free fire tonight tomorrow yesterday alone wind hair air river morning valley ' +
+   'song sing dance let take give hold hand hands man woman girl boy good bad little big young yeah oh ooh la na hey well back ever every always cause mind town city ' +
+   'sea tears cry friend friends bring sometimes kiss arms wild walk run fly high low slow slowly lost found wanna gonna gotta our us out off end last same live die ' +
+   'god lord shine stars star fall rise rising open door window wall street car train name words word true lie lies hope pain hurt sound silence tell told talk ' +
+   'heaven hell place face room year voice head sight dim she he his her him they them their there then than this that these those were was ' +
+   'stay leave left right wrong best better there\'s i\'m don\'t can\'t won\'t it\'s you\'re she\'s he\'s we\'re they\'re that\'s what\'s').split(/\s+/).forEach(function (w) { COMMON[w] = 1; });
+  function isHebrewCh(c) { return /[\u05D0-\u05EA]/.test(c); }
+  /** מפריד אקורד שנדבק לתחילת מילה. strong = ודאי; weak = רק אם בטקסט יש הרבה ודאיים */
+  function glueKind(tok, first, prevTok) {
+    var m = GLUE.exec(tok); if (!m) return null;
+    var ch = m[1], rest = m[2], c0 = rest[0];
+    if (!/[A-Za-z\u05D0-\u05EA'"(]/.test(c0)) return null;
+    if (isHebrewCh(c0)) return { ch: ch, rest: rest, strong: true };
+    if (/['"(]/.test(c0) && /^['"(]+[A-Zא-ת]/.test(rest)) return { ch: ch, rest: rest, strong: true };   // A"We… — אקורד לפני מירכאות
+    var fancy = /[#b0-9\/]|sus|maj|dim|aug|add/.test(ch.slice(1));
+    if (/[A-Z]/.test(c0)) {
+      if (rest.length > 1 && !/[a-z]/.test(rest)) return null;          // מילה באותיות גדולות (BABY) — לא אקורד
+      return { ch: ch, rest: rest, strong: true };
+    }
+    if (fancy) return { ch: ch, rest: rest, strong: true };
+    if (first || (prevTok && /[.!?]$/.test(prevTok))) return null;       // תחילת משפט: מילה רגילה באות גדולה (Every, And)
+    // באמצע שורה, אות גדולה ואחריה קטנות: אקורד דבוק (Erising) או שם פרטי (California)? רק אם השארית נראית כמו מילה
+    var w = rest.toLowerCase().replace(/[^a-z']+$/, '');
+    if (!(COMMON[w] || (w.length >= 4 && /(ing|ed|ly|ness|less|ful)$/.test(w)))) return null;
+    return { ch: ch, rest: rest, strong: false };
+  }
+  function preprocess(text) {
+    var lines = text.replace(/\r/g, '').split('\n'), out = [], strumNote = '', strong = 0, known = {};
+    // סבב 1: סופרים אקורדים דבוקים ודאיים כדי להחליט אם הטקסט בכלל בפורמט הזה, ואוספים את האקורדים של השיר
+    lines.forEach(function (l) {
+      var lm = l.trim().match(LABEL), cl = chordLine(l) ? l : (lm && chordLine(lm[2].replace(/\([^)]*\)/g, '')) ? lm[2] : null);
+      if (cl) { chordCols(cl).forEach(function (x) { known[x.c] = 1; }); return; }
+      var toks = l.trim().split(/\s+/);
+      toks.forEach(function (t, i) { var g = glueKind(t, i === 0, toks[i - 1]); if (g && g.strong) { strong++; known[normChord(g.ch)] = 1; } });
+    });
+    var glueOn = strong >= 3, glued = 0;
+    var inlineOn = glueOn || (text.match(/\[[A-G][#b]?[^\]\s]{0,6}\]/g) || []).length >= 4;   // הטקסט בפורמט "אקורד בתוך השורה"
+    var MID = new RegExp('([a-z\\u05D0-\\u05EA])(' + CH_RE + ')(?=[a-z\\u05D0-\\u05EA])', 'g');
+    var PUNCT = new RegExp('([,.;:!?])(' + CH_RE + ')$');
+    lines.forEach(function (l) {
+      var t = l.trim(), m;
+      if ((m = t.match(/^strum(?:ming)?(?:\s*pattern)?\s*[:\-]?\s*([dDuUxX][dDuUxX\/\s,.\-–]*)$/i))) {
+        var seq = m[1].toUpperCase().match(/[DUX]/g) || [];
+        strumNote = 'פריטה לפי המקור: ' + seq.map(function (x) { return x === 'D' ? '↓' : x === 'U' ? '↑' : 'X'; }).join(' ');
+        return;
+      }
+      if ((m = t.match(LABEL)) && chordLine(m[2].replace(/\(\s*\d+\s*x\s*\)|\(\s*x\s*\d+\s*\)/ig, ''))) {
+        out.push('{section: ' + m[1] + '}');
+        out.push(inlineOn ? chordCols(m[2]).map(function (x) { return '[' + x.c + ']'; }).join(' ') : m[2]);
+        return;
+      }
+      if (!glueOn || chordLine(l) || /^\s*\{/.test(l)) { out.push(l); return; }
+      var toks = l.split(/(\s+)/), k = 0;
+      out.push(toks.map(function (tok, i) {
+        if (/^\s*$/.test(tok) || /\[/.test(tok)) return tok;
+        var prev = null; for (var j = i - 1; j >= 0; j--) if (!/^\s*$/.test(toks[j])) { prev = toks[j]; break; }
+        var first = k++ === 0, pm;
+        // אקורד לבד באמצע שורת מילים ("G Welcome") — בטקסט דבוק זה תמיד אקורד; חוץ מ-"A" שהיא גם מילה
+        if (isChordTok(tok) && known[normChord(tok)] && tok !== 'A') { glued++; return '[' + normChord(tok) + ']'; }
+        // אקורד שנדבק אחרי סימן פיסוק ("candle,D")
+        if ((pm = PUNCT.exec(tok)) && known[normChord(pm[2])]) { glued++; return tok.slice(0, pm.index + 1) + ' [' + normChord(pm[2]) + ']'; }
+        var g = glueKind(tok, first, prev), res = tok;
+        if (g && (g.strong || known[normChord(g.ch)])) { glued++; res = '[' + normChord(g.ch) + ']' + g.rest; }     // "California" לא מפוצל אם C לא מופיע בשיר
+        // אקורד באמצע מילה ("CaliDfornia" → Cali[D]fornia): אות גדולה של אקורד מוכר בין אותיות קטנות
+        return res.replace(MID, function (all, a, ch) { if (!known[normChord(ch)]) return all; glued++; return a + '[' + normChord(ch) + ']'; });
+      }).join(''));
+    });
+    return { text: out.join('\n'), strumNote: strumNote, glued: glued };
+  }
+
+  /**
+   * הדבקה עם עיצוב (text/html מהלוח): באתרי אקורדים האקורד הוא אלמנט נפרד בתוך שורת המילים
+   * (למשל chordie: <span class="absc Bm">Bm</span>). ממירים כל אלמנט כזה ל-[Bm] במקום המדויק — בלי לנחש עמודות.
+   * מחזיר טקסט (ChordPro או אקורדים-מעל-מילים) או null אם אין מבנה אקורדים.
+   */
+  GK.htmlToSongText = function (html) {
+    if (!html || typeof DOMParser === 'undefined') return null;
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script,style,noscript,iframe,svg,button,select,input,[class*="bracket"]').forEach(function (e) { e.remove(); });
+    var marked = 0;
+    doc.querySelectorAll('body *').forEach(function (el) {
+      if (el.children.length) return;
+      var t = (el.textContent || '').trim();
+      if (!t || t.length > 12 || !isChordTok(t)) return;
+      // אקורד שהוא אלמנט משלו (span/b/sup…). מסמנים אותו כאקורד בתוך השורה.
+      el.textContent = '\u0001' + normChord(t) + '\u0002';
+      marked++;
+    });
+    if (marked < 3) return null;
+    var txt = nodeToText(doc.body);
+    // שורה שכולה אקורדים (סגנון "אקורדים מעל המילים" בתוך <pre>): מחזירים לשמות רגילים כדי לשמור על העמודות
+    txt = txt.split('\n').map(function (l) {
+      var only = l.replace(/\u0001[^\u0002]*\u0002/g, '').replace(/[\s|\-–.:x0-9()]/gi, '') === '';
+      return only ? l.replace(/\u0001([^\u0002]*)\u0002/g, '$1') : l.replace(/\u0001([^\u0002]*)\u0002\s*/g, '[$1]');
+    }).join('\n');
+    txt = txt.replace(/\[\s*(\[[^\]]+\])\s*\]/g, '$1');                   // [[Bm]] → [Bm] כשהסוגריים לא סומנו כ-bracket
+    return txt;
+  };
+
   function stripMarks(s) { return s.replace(/[‎‏‪-‮⁦-⁩]/g, ''); }
 
   /** ממזג שורת אקורדים + שורת מילים: מכניס [אקורד] לפני המילה שמתחתיו. mode: 'rtl' | 'ltr' */
@@ -91,7 +198,16 @@
   GK.importPaste = function (text, opt) {
     opt = opt || {};
     text = cleanEnglishMarkup(String(text || ''));
-    if (inlineChordpro(text)) { var cp = GK.chordproToSong(text, 'טקסט שהודבק (ChordPro)'); return { song: cp.song, title: cp.title, artist: cp.artist, capo: 0, time: null, key: null, warnings: [], stats: { chordLines: 0, merged: 0, lyricLines: 0 } }; }
+    var pre = preprocess(text); text = pre.text;
+    if (inlineChordpro(text)) {
+      var cp = GK.chordproToSong(text, 'טקסט שהודבק');
+      var song = cp.song;
+      if (opt.title) song = song.replace(/^\{title: .*\}/, '{title: ' + opt.title + '}');
+      if (opt.artist && !cp.artist) song = song.replace(/^(\{title: .*\})/, '$1\n{artist: ' + opt.artist + '}');
+      if (pre.strumNote) song = song.replace(/\{note: /, '{note: ' + pre.strumNote + ' · ');
+      if (opt.video) song = song.replace(/\{note: /, '{video: ' + opt.video + '}\n{note: ');
+      return { song: song, title: cp.title, artist: cp.artist, capo: 0, time: null, key: null, warnings: pre.glued ? ['האקורדים היו צמודים למילים (כך מעתיקים מאתרים כמו chordie) — הופרדו אוטומטית. עבור על התצוגה המקדימה.'] : [], stats: { chordLines: 0, merged: 0, lyricLines: 0, glued: pre.glued } };
+    }
     var mode = opt.mode && opt.mode !== 'auto' ? opt.mode : (isMostlyLatin(text) ? 'ltr' : 'rtl');
     var raw = stripMarks(String(text || '')).replace(/\r/g, '').replace(/\t/g, '    ').split('\n');
     var video = opt.video || '';

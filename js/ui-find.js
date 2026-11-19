@@ -54,6 +54,15 @@
         location.hash = (edit ? '#/edit/' : '#/song/') + encodeURIComponent(id);
       }
       q('#f-txt').addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(preview, 250); });
+      // הדבקה חכמה: אם בלוח יש גם גרסת HTML (כך מעתיקים מדפדפן), לוקחים ממנה את מיקום האקורדים המדויק
+      q('#f-txt').addEventListener('paste', function (e) {
+        var html = e.clipboardData && e.clipboardData.getData('text/html');
+        var t = html && GK.htmlToSongText(html);
+        if (!t) return;                                   // אין מבנה אקורדים ב-HTML: הדבקה רגילה
+        e.preventDefault();
+        q('#f-txt').value = t; preview();
+        GK.toast('✓ האקורדים נקלטו לפי המיקום המדויק שלהם בדף');
+      });
       ['#f-mode', '#f-title', '#f-artist'].forEach(function (s) { q(s).addEventListener('input', preview); });
       q('#f-open').addEventListener('click', function () {
         var v = q('#f-q').value.trim();
@@ -63,7 +72,18 @@
       q('#f-q').addEventListener('keydown', function (e) { if (e.key === 'Enter') q('#f-open').click(); });
       q('#f-paste').addEventListener('click', function () {
         if (!navigator.clipboard || !navigator.clipboard.readText) { GK.toast('הדפדפן לא מאפשר קריאת לוח — הדבק ידנית בתיבה'); q('#f-txt').focus(); return; }
-        navigator.clipboard.readText().then(function (t) { q('#f-txt').value = t; preview(); }, function () { GK.toast('אין הרשאה ללוח — הדבק ידנית בתיבה'); q('#f-txt').focus(); });
+        var plain = function () { navigator.clipboard.readText().then(function (t) { q('#f-txt').value = t; preview(); }, function () { GK.toast('אין הרשאה ללוח — לחץ לחיצה ארוכה בתיבה ← הדבק'); q('#f-txt').focus(); }); };
+        if (!navigator.clipboard.read) { plain(); return; }
+        // קודם מנסים את גרסת ה-HTML (מיקום אקורדים מדויק), ואם אין — טקסט רגיל
+        navigator.clipboard.read().then(function (items) {
+          var it = items.filter(function (x) { return x.types.indexOf('text/html') >= 0; })[0];
+          if (!it) { plain(); return; }
+          return it.getType('text/html').then(function (b) { return b.text(); }).then(function (html) {
+            var t = GK.htmlToSongText(html);
+            if (!t) { plain(); return; }
+            q('#f-txt').value = t; preview(); GK.toast('✓ האקורדים נקלטו לפי המיקום המדויק שלהם בדף');
+          });
+        }).catch(plain);
       });
       function renderLib(items, term) {
         var t = (term || '').toLowerCase().trim(), box = q('#f-lib');
