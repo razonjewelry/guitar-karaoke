@@ -106,7 +106,7 @@
     if (cur) {
       setChord(cur.chord);
       setStrip(S.song.lines[cur.line].strum);
-      setHint('נגן: <b>' + esc(cur.chord) + '</b>');
+      setHint('נגן: <b>' + esc(cur.chord) + '</b>' + (S.steps[i + 1] ? ' <small class="nx">← ' + esc(S.steps[i + 1].chord) + '</small>' : ''));
       S.lyr.scrollTo({ top: Math.max(0, S.lines[cur.line].offsetTop - S.lyr.clientHeight * 0.3), behavior: 'smooth' });
     } else {
       setChord(null);
@@ -301,22 +301,23 @@
     root.innerHTML =
       '<header class="p-top"><a class="btn icon" href="#/" aria-label="חזרה">→</a>' +
       '<div class="p-title"><h1>' + esc(song.title) + '</h1><small>' + meta + '</small></div>' +
-      '<button class="btn" id="p-edit">' + (song.builtin ? '✎ עותק לעריכה' : '✎ עריכה') + '</button></header>' +
+      '<button class="btn icon" id="p-edit" aria-label="' + (song.builtin ? 'עותק לעריכה' : 'עריכה') + '">✎</button></header>' +
       '<div class="chordbar" id="p-chords">' + song.chords.map(function (c) {
         return '<div class="cc" data-c="' + esc(c) + '">' + GK.chordSvg(c) + '<span>' + esc(c) + '</span></div>';
       }).join('') + '</div>' +
-      '<div class="nownext"><div>עכשיו <b id="p-now">—</b></div><div>הבא <b id="p-next">—</b></div></div>' +
+      '<div class="nownext" hidden><b id="p-now">—</b><b id="p-next">—</b></div>' +
       '<details class="p-coach" id="p-coachbox"><summary><span>🥁 מאמן פריטה ▾</span><span class="co-mini" id="p-mini" dir="ltr"></span></summary><div id="p-coach"></div></details>' +
       '<div class="status"><span class="step" id="p-step">0/' + steps.length + '</span><span class="hint" id="p-hint"></span><span class="heard" id="p-heard">🎤 —</span></div>' +
-      '<div class="status2"><i class="lvl" title="עוצמת המיקרופון"><b id="p-lvl"></b></i><span class="cnt" id="p-cnt">פריטות: 0</span>' +
+      '<div class="p-tools" id="p-tools" hidden>' +
       '<button class="btn" id="p-hear" aria-label="שמע איך הפריטה נשמעת">🔊 שמע פריטה</button><button class="btn" id="p-vid" aria-label="השיר המקורי ביוטיוב">🎬 שיר מקורי</button>' +
-      '<button class="btn tog" id="p-full" aria-label="מצב דפוס"></button></div><div class="p-video" id="p-video" hidden></div>' +
+      '<button class="btn tog" id="p-full" aria-label="מצב דפוס"></button><button class="btn tog" id="p-sens" aria-label="רגישות המיקרופון"></button><button class="btn tog" id="p-font" aria-label="גודל גופן">Aa</button>' +
+      '<span class="cnt" id="p-cnt">פריטות: 0</span><i class="lvl" title="עוצמת המיקרופון"><b id="p-lvl"></b></i></div>' +
+      '<div class="p-video" id="p-video" hidden></div>' +
       '<div class="lwrap"><div class="lyrics" id="p-lyrics">' + lyricsHtml(song) + '</div></div>' +
       '<footer class="dock"><button class="play" id="p-play">🎤 התחל</button>' +
-      '<button class="btn" id="p-restart" aria-label="התחל מההתחלה">↺ מההתחלה</button><button class="btn" id="p-back" aria-label="אקורד קודם">⏮</button>' +
+      '<button class="btn" id="p-restart" aria-label="התחל מההתחלה">↺</button><button class="btn" id="p-back" aria-label="אקורד קודם">⏮</button>' +
       '<button class="btn" id="p-skip" aria-label="דלג על האקורד">⏭</button>' +
-      '<button class="btn tog" id="p-sens" aria-label="רגישות המיקרופון"></button>' +
-      '<button class="btn tog" id="p-font" aria-label="גודל גופן">Aa</button></footer>';
+      '<button class="btn tog" id="p-more" aria-label="עוד כלים">⋯</button></footer>';
     root.style.setProperty('--fs', set.fontPx + 'px');
 
     var q = function (sel) { return root.querySelector(sel); };
@@ -356,6 +357,7 @@
       if (ln) jumpToLine(parseInt(ln.getAttribute('data-i'), 10));
     });
     S.playBtn.addEventListener('click', function () { if (S.listening) stopListen(); else startListen(); });
+    q('#p-more').addEventListener('click', function () { var t = q('#p-tools'); t.hidden = !t.hidden; q('#p-more').classList.toggle('on', !t.hidden); });
     q('#p-restart').addEventListener('click', function () {
       if (S.coach) S.coach.stop();
       S.matcher.reset(false); S.lastAdv = -1e9;

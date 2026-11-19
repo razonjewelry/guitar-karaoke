@@ -267,3 +267,21 @@ details code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; 
 .c-live { font-size: 14px; min-height: 0; }
 .c-done { text-align: center; font-weight: 800; font-size: 18px; padding: 8px; }
 #c-fin { display: flex; flex-direction: column; gap: 8px; padding-bottom: 20px; }
+
+/* ───── תצוגת טלפון: יותר מקום למילים ───── */
+.p-top { padding: 6px 10px; gap: 8px; }
+.p-title h1 { font-size: 17px; }
+.p-title small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chordbar { padding: 4px 8px; gap: 4px; }
+.cc { width: 46px; padding: 1px; border-radius: 8px; }
+.cc svg { width: 70%; margin: 0 auto; }
+.cc span { font-size: 12px; }
+.nownext { display: none !important; }
+.status { padding: 4px 12px; }
+.status .hint .nx { color: var(--muted); font-size: .8em; font-weight: 600; }
+.p-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 12px; background: var(--panel2); border-bottom: 1px solid var(--line); }
+.p-tools[hidden] { display: none; }
+.p-tools .btn { padding: 5px 10px; font-size: 13px; }
+.p-tools .cnt { flex: 1; text-align: center; color: var(--muted); font-size: 13px; font-weight: 700; }
+.p-tools .lvl { width: 60px; }
+.p-coach summary { padding: 2px 10px; }
