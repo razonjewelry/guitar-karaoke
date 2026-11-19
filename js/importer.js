@@ -225,6 +225,57 @@
     });
   };
 
+  // ───── ספריית שירים באנגלית (קבצי ChordPro פתוחים ב-GitHub, נטענים דרך jsDelivr שמאפשר קריאה מדפדפן) ─────
+  GK.LIB_SOURCES = [
+    { id: 'xmas', repo: 'pathawks/Christmas-Songs', label: 'שירי חג (נחלת הכלל)', pick: function (p) { return /\.cho$/i.test(p) && p.split('/').length === 2; } },
+    { id: 'hymn', repo: 'dsmithco/worship-chordpro', label: 'מזמורים (בעיקר נחלת הכלל)', pick: function (p) { return /\.cho$/i.test(p) && /^\/songs\//.test(p); } }
+  ];
+  var libIndex = null;
+  /** Promise<[{src, path, name}]> — רשימת הקבצים (נטענת פעם אחת) */
+  GK.libIndex = function () {
+    if (libIndex) return libIndex;
+    libIndex = Promise.all(GK.LIB_SOURCES.map(function (s) {
+      return fetch('https://data.jsdelivr.com/v1/packages/gh/' + s.repo + '@master?structure=flat').then(function (r) { return r.ok ? r.json() : { files: [] }; }, function () { return { files: [] }; }).then(function (d) {
+        return (d.files || []).filter(function (f) { return s.pick(f.name); }).map(function (f) {
+          var base = f.name.split('/').pop().replace(/\.cho$/i, '');
+          return { src: s, path: f.name, name: base.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() };
+        });
+      });
+    })).then(function (a) { var all = [].concat.apply([], a); if (!all.length) libIndex = null; return all; });
+    return libIndex;
+  };
+  GK.libFetch = function (item) {
+    return fetch('https://cdn.jsdelivr.net/gh/' + item.src.repo + '@master' + item.path).then(function (r) {
+      if (!r.ok) throw new Error('לא הצלחתי לטעון את השיר (' + r.status + ')');
+      return r.text();
+    });
+  };
+  /** ChordPro → פורמט האפליקציה. משאיר title/artist/time/capo/key, ממיר כותרות קטעים, מוריד פקודות לא מוכרות. אקורדים [C] זהים. */
+  GK.chordproToSong = function (text, src) {
+    var head = [], body = [], d, title = '', artist = '';
+    String(text || '').replace(/\r/g, '').split('\n').forEach(function (l) {
+      var t = l.trim();
+      if (t[0] === '#') return;
+      if ((d = t.match(/^\{\s*([a-z_]+)\s*:?\s*(.*?)\s*\}$/i))) {
+        var k = d[1].toLowerCase(), v = d[2];
+        if (k === 'title' || k === 't') title = v;
+        else if (k === 'artist' || k === 'composer' || k === 'lyricist' || k === 'text' || k === 'music') { if (!artist && v) artist = v.replace(/,?\s*\d{4}.*$/, ''); }
+        else if (k === 'time' && /^\d\/\d$/.test(v)) head.push('{time: ' + v + '}');
+        else if (k === 'capo' && /^\d+$/.test(v)) head.push('{capo: ' + v + '}');
+        else if (k === 'key') head.push('{key: ' + v + '}');
+        else if (k === 'comment' || k === 'c' || k === 'comment_italic' || k === 'ci' || k === 'cb') body.push('{section: ' + v + '}');
+        else if (/^(start_of_|sov|soc|sob)/.test(k)) body.push('{section: ' + (v || (/^(start_of_chorus|soc)/.test(k) ? 'פזמון' : 'בית')) + '}');
+        return;
+      }
+      body.push(l.replace(/\[(?:\*[^\]]*|[^\]]*\/\/[^\]]*)\]/g, ''));
+    });
+    var out = ['{title: ' + (title || 'שיר חדש') + '}'];
+    if (artist) out.push('{artist: ' + artist + '}');
+    out = out.concat(head);
+    out.push('{note: מקור: ' + (src || 'ספריית ChordPro פתוחה') + '}');
+    return { song: out.join('\n') + '\n\n' + body.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n', title: title, artist: artist };
+  };
+
   /** כתובת חיפוש ב-Tab4U (נפתחת בלשונית חדשה על ידי המשתמש; האפליקציה לא קוראת את האתר) */
   GK.tab4uSearchUrl = function (q) { return 'https://www.tab4u.com/resultsSimple?tab=songs&q=' + encodeURIComponent(q); };
 

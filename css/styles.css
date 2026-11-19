@@ -285,3 +285,6 @@ details code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; 
 .p-tools .cnt { flex: 1; text-align: center; color: var(--muted); font-size: 13px; font-weight: 700; }
 .p-tools .lvl { width: 60px; }
 .p-coach summary { padding: 2px 10px; }
+
+.f-lib { display: flex; flex-wrap: wrap; gap: 6px; max-height: 26vh; overflow-y: auto; }
+.f-lib .btn { padding: 5px 10px; font-size: 13px; }

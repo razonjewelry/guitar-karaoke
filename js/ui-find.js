@@ -24,6 +24,9 @@
         'בחר שיר באתר, סמן והעתק את העמוד עם האקורדים (או השתמש ב"שתף" ← האפליקציה, אם הותקנה על המסך הראשי).</div></div>' +
         '<div class="f-step"><b>או: הדבק קישור לדף שיר</b><div class="f-search"><input class="search" id="f-url" type="url" dir="ltr" placeholder="https://…">' +
         '<button class="btn" id="f-fetch">🔗 הבא מהקישור</button></div><div class="note">עובד רק באתרים שמאפשרים קריאה (למשל אתרי וורדפרס). Tab4U לא מאפשר — שם מעתיקים ומדביקים. אם יש בדף קישור ליוטיוב, הוא נשמר עם השיר.</div></div>' +
+        '<div class="f-step"><b>📚 ספרייה פתוחה באנגלית</b><div class="f-search"><input class="search" id="f-lq" type="search" placeholder="חפש בספרייה (למשל Amazing, Silent, Abide)" dir="ltr"></div>' +
+        '<div class="f-lib" id="f-lib"><span class="note">טוען רשימה…</span></div>' +
+        '<div class="note">שירי חג ומזמורים שפורסמו בקבצי ChordPro פתוחים. לחץ על שיר כדי לראות תצוגה מקדימה ולשמור.</div></div>' +
         '<div class="f-step"><b>2. הדבק</b><div class="f-search"><button class="btn" id="f-paste">📋 הדבק מהלוח</button>' +
         '<label class="f-mode">יישור אקורדים: <select id="f-mode"><option value="rtl">ימין-לשמאל (עברית)</option><option value="ltr">שמאל-לימין</option></select></label></div>' +
         '<textarea class="e-area" id="f-txt" placeholder="הדבק כאן את הטקסט עם האקורדים…" spellcheck="false"></textarea>' +
@@ -61,6 +64,31 @@
       q('#f-paste').addEventListener('click', function () {
         if (!navigator.clipboard || !navigator.clipboard.readText) { GK.toast('הדפדפן לא מאפשר קריאת לוח — הדבק ידנית בתיבה'); q('#f-txt').focus(); return; }
         navigator.clipboard.readText().then(function (t) { q('#f-txt').value = t; preview(); }, function () { GK.toast('אין הרשאה ללוח — הדבק ידנית בתיבה'); q('#f-txt').focus(); });
+      });
+      function renderLib(items, term) {
+        var t = (term || '').toLowerCase().trim(), box = q('#f-lib');
+        var list = items.filter(function (x) { return !t || x.name.toLowerCase().indexOf(t) >= 0; }).slice(0, 40);
+        box.innerHTML = list.length ? list.map(function (x, i) { return '<button class="btn" data-li="' + items.indexOf(x) + '" dir="ltr">' + esc(x.name) + '</button>'; }).join('') : '<span class="note">לא נמצא שיר כזה בספרייה</span>';
+      }
+      var libItems = [];
+      GK.libIndex().then(function (items) {
+        libItems = items;
+        if (!items.length) { q('#f-lib').innerHTML = '<span class="note">הספרייה לא זמינה כרגע (אין חיבור?)</span>'; return; }
+        renderLib(items, '');
+      });
+      q('#f-lq').addEventListener('input', function () { renderLib(libItems, q('#f-lq').value); });
+      q('#f-lib').addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('[data-li]') : null; if (!b) return;
+        var it = libItems[+b.getAttribute('data-li')];
+        GK.libFetch(it).then(function (txt) {
+          var r = GK.chordproToSong(txt, it.src.repo);
+          cur = { song: r.song, warnings: [], stats: { merged: 0 } };
+          var song = GK.parseSong(r.song);
+          q('#f-prev').innerHTML = GK.ui.lyricsHtml(song);
+          q('#f-warn').innerHTML = esc(r.title || it.name) + '<br><span class="ok">' + song.chords.length + ' אקורדים · ' + esc(it.src.label) + '</span>';
+          q('#f-save').disabled = q('#f-edit').disabled = !song.chords.length;
+          q('#f-prev').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, function (err) { GK.toast(err.message || 'הטעינה נכשלה'); });
       });
       q('#f-fetch').addEventListener('click', function () {
         var b = q('#f-fetch'); b.disabled = true; b.textContent = '⏳ טוען…';
