@@ -28,7 +28,7 @@
         '<div class="f-lib" id="f-lib"><span class="note">טוען רשימה…</span></div>' +
         '<div class="note">שירי חג ומזמורים שפורסמו בקבצי ChordPro פתוחים. לחץ על שיר כדי לראות תצוגה מקדימה ולשמור.</div></div>' +
         '<div class="f-step"><b>2. הדבק</b><div class="f-search"><button class="btn" id="f-paste">📋 הדבק מהלוח</button>' +
-        '<label class="f-mode">יישור אקורדים: <select id="f-mode"><option value="rtl">ימין-לשמאל (עברית)</option><option value="ltr">שמאל-לימין</option></select></label></div>' +
+        '<label class="f-mode">יישור אקורדים: <select id="f-mode"><option value="auto">אוטומטי</option><option value="rtl">ימין-לשמאל (עברית)</option><option value="ltr">שמאל-לימין (אנגלית)</option></select></label></div>' +
         '<textarea class="e-area" id="f-txt" placeholder="הדבק כאן את הטקסט עם האקורדים…" spellcheck="false"></textarea>' +
         '<div class="f-search"><input class="search" id="f-title" placeholder="שם השיר (אם לא זוהה)"><input class="search" id="f-artist" placeholder="אמן (אופציונלי)"></div></div>' +
         '<div class="f-step"><b>3. תצוגה מקדימה</b><div id="f-warn" class="warn"></div><div class="lyrics f-prev" id="f-prev"></div></div>' +

@@ -37,6 +37,21 @@ ok(GK.importPaste('Am\nAbout love', { mode: 'ltr' }).stats.merged === 1 && GK.im
 // RTL: האקורד הימני שייך לתחילת המילים
 const r6 = GK.importPaste('                 Am\nשלום עולם', { mode: 'rtl' });
 ok(GK.parseSong(r6.song).lines[0].segs[0].c === 'Am' || GK.parseSong(r6.song).lines[0].segs[0].t === '' , 'יישור RTL: אקורד בקצה הימני צמוד לתחילת השורה');
+
+// ───── אנגלית: Ultimate-Guitar-style, זיהוי אוטומטי של כיוון, ChordPro בתוך השורה ─────
+{
+  const ug = ['Let It Be Chords by The Beatles', 'Tuning: Standard', 'Capo: 2nd fret', '[Verse 1]', '[ch]C[/ch]           [ch]G[/ch]', 'When I find myself in times of trouble', '[ch]Am[/ch]        [ch]F[/ch]', 'Mother Mary comes to me', 'e|---0---1---|', 'B|---1---0---|'].join('\n');
+  const e = GK.importPaste(ug, {});                 // בלי mode: אוטומטי → LTR
+  const es = GK.parseSong(e.song);
+  ok(es.title === 'Let It Be' && es.artist === 'The Beatles', 'כותרת/אמן מ-"X Chords by Y": ' + es.title + '/' + es.artist);
+  ok(es.capo === 2, 'קאפו מ-"2nd fret": ' + es.capo);
+  ok(es.chords.join() === 'C,G,Am,F', 'אקורדים עם תגי [ch]: ' + es.chords.join());
+  ok(es.lines[0].segs[0].c === 'C' && es.lines[0].segs[0].t.startsWith('When'), 'C בתחילת "When" (LTR אוטומטי)');
+  ok(!/e\|---/.test(e.song) && !/Tuning/.test(e.song), 'שורות טאב ו-Tuning הוסרו');
+  const cp = GK.importPaste('{title: Test Song}\n[C]Hello [G]world [Am]how are [F]you\n[C]Fine [G]thanks [Am]and [F]you', {});
+  const cps = GK.parseSong(cp.song);
+  ok(cps.title === 'Test Song' && cps.chords.join() === 'C,G,Am,F', 'ChordPro בתוך השורה עובר כמו שהוא: ' + cps.chords.join());
+}
 // כתובת חיפוש
 ok(GK.tab4uSearchUrl('אמן שיר').startsWith('https://www.tab4u.com/resultsSimple?tab=songs&q=%D7'), 'כתובת חיפוש Tab4U');
 console.log(pass + ' passed, ' + fail + ' failed');

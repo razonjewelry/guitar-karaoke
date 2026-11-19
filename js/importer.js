@@ -39,6 +39,23 @@
     return out;
   }
 
+  /** האם רוב האותיות בטקסט לטיניות (אנגלית) — אז היישור הוא משמאל לימין */
+  function isMostlyLatin(t) {
+    var he = (t.match(/[\u0590-\u05FF]/g) || []).length, la = (t.match(/[A-Za-z]/g) || []).length;
+    return la > he * 2;
+  }
+  /** ניקוי סימוני אתרי אקורדים באנגלית: [ch]C[/ch], [tab]…[/tab], שורות טאב (e|--3--|) */
+  function cleanEnglishMarkup(t) {
+    t = t.replace(/\[\/?ch\]/gi, '').replace(/\[\/?tab\]/gi, '');
+    return t.split('\n').filter(function (l) { return !/^\s*[eEBGDAa]\|?[-0-9hpbrx\/\~|().]{6,}\s*$/.test(l) && !/^\s*(tuning|difficulty|rating|views|author|submitted|last edit)\b/i.test(l); }).join('\n');
+  }
+  /** טקסט שכבר בפורמט ChordPro (אקורדים בתוך השורה [C]) ובלי שורות אקורדים נפרדות */
+  function inlineChordpro(t) {
+    var inl = (t.match(/\[[A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?[0-9]*(?:\/[A-G][#b]?)?\]/g) || []).length;
+    if (inl < 4) return false;
+    var only = t.split('\n').filter(function (l) { return chordLine(l); }).length;
+    return only < 2;
+  }
   function stripMarks(s) { return s.replace(/[‎‏‪-‮⁦-⁩]/g, ''); }
 
   /** ממזג שורת אקורדים + שורת מילים: מכניס [אקורד] לפני המילה שמתחתיו. mode: 'rtl' | 'ltr' */
@@ -73,7 +90,9 @@
    */
   GK.importPaste = function (text, opt) {
     opt = opt || {};
-    var mode = opt.mode || 'rtl';
+    text = cleanEnglishMarkup(String(text || ''));
+    if (inlineChordpro(text)) { var cp = GK.chordproToSong(text, 'טקסט שהודבק (ChordPro)'); return { song: cp.song, title: cp.title, artist: cp.artist, capo: 0, time: null, key: null, warnings: [], stats: { chordLines: 0, merged: 0, lyricLines: 0 } }; }
+    var mode = opt.mode && opt.mode !== 'auto' ? opt.mode : (isMostlyLatin(text) ? 'ltr' : 'rtl');
     var raw = stripMarks(String(text || '')).replace(/\r/g, '').replace(/\t/g, '    ').split('\n');
     var video = opt.video || '';
     raw = raw.filter(function (l) { var y = /https?:\/\/(?:www\.|m\.)?(?:youtube\.com|youtu\.be)[^\s]*/i.exec(l); if (y) { video = video || y[0]; return false; } return true; });
@@ -87,7 +106,7 @@
       for (var k = 0; k < Math.min(raw.length, 8); k++) {
         var h = raw[k].trim();
         if (!h || chordLine(h) || CHROME.test(h) || SECTION_RE.test(h) || /^(קאפו|capo|טונליות|סולם|key|משקל|time)(?:\s|:|$)/i.test(h)) continue;
-        var m = h.match(/^(?:אקורדים(?:\s+ל(?:שיר)?)?\s*)?(.+?)\s*(?:[-–—|]|של)\s*(.+)$/);
+        var m = h.match(/^(.+?)\s+(?:chords?|tabs?)\s+by\s+(.+)$/i) || h.match(/^(?:אקורדים(?:\s+ל(?:שיר)?)?\s*)?(.+?)\s*(?:[-–—|]|של)\s*(.+)$/);
         titleIdx = k;
         if (m && h.length < 80) { title = m[1].replace(/^אקורדים\s*(?:ל(?:שיר)?)?\s*/, '').trim(); artist = artist || m[2].replace(/\s*[-–|].*$/, '').trim(); }
         else if (h.length < 60 && !/[.:,]$/.test(h)) title = title || h;
