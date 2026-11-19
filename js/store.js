@@ -1,7 +1,7 @@
 /* שמירה מקומית (localStorage): שירי המשתמש, הגדרות, גיבוי ושחזור */
 (function () {
   var GK = (window.GK = window.GK || {});
-  var K_SONGS = 'gk_user_songs_v1', K_SET = 'gk_settings_v1', K_PRAC = 'gk_practice_v1', K_PREF = 'gk_songprefs_v1';
+  var K_SONGS = 'gk_user_songs_v1', K_SET = 'gk_settings_v1', K_PRAC = 'gk_practice_v1', K_PREF = 'gk_songprefs_v1', K_COURSE = 'gk_course_v1';
   var PRACTICE = { bpm: 60, voiceLanguage: 'en', speakBeforePlaying: true, speakDuringPlaying: false, silentRests: true, countInEnabled: true, loopEnabled: true, voiceRate: 0.9, click: true, strumSound: true };
   var DEFAULTS = { fontPx: 22, sens: 1, full: false };
 
@@ -46,6 +46,10 @@
     /** העדפות לכל שיר: {patternId, time, step} — פריטה שנבחרה, משקל שנבחר כשלא ידוע, התקדמות */
     songPrefs: function (id) { return read(K_PREF, {})[id] || {}; },
     setSongPref: function (id, k, v) { var a = read(K_PREF, {}); a[id] = a[id] || {}; a[id][k] = v; write(K_PREF, a); },
+
+    /** התקדמות בקורס: {done:{n:ts}, steps:{n:{i:true}}, rev:{n:[ימים]}} */
+    course: function () { return read(K_COURSE, {}); },
+    setCourse: function (v) { write(K_COURSE, v); },
 
     /** גיבוי: JSON של כל שירי המשתמש */
     exportJson: function () { return JSON.stringify({ app: 'guitar-karaoke', v: 1, songs: this.users() }); },

@@ -130,7 +130,7 @@
     if (S.cards[st.chord]) flash(S.cards[st.chord], 'flash');
     if (navigator.vibrate) navigator.vibrate(35);
     var carry = S.set.full ? [] : S.stepOnsets.filter(function (i) { return i > S.confirmIdx; });   // פריטות שכבר שייכות לאקורד הבא
-    if (S.idx + 1 >= S.steps.length) { setStep(S.steps.length); stopListen(); GK.toast('סיימת את השיר 🎸'); }
+    if (S.idx + 1 >= S.steps.length) { if (S.song.id) GK.store.setSongPref(S.song.id, 'done', Date.now()); setStep(S.steps.length); stopListen(); GK.toast('סיימת את השיר 🎸'); }
     else setStep(S.idx + 1, carry, true);
   }
 
@@ -186,8 +186,42 @@
     renderHits();
   }
 
+  /** מזהה סרטון יוטיוב מקישור (watch, youtu.be, shorts, embed) */
+  function ytId(u) {
+    var m = String(u || '').match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/);
+    return m ? m[1] : null;
+  }
+  GK.ytId = ytId;
+  function videoUrl() { return (GK.store.songPrefs(S.song.id).video) || S.song.video || ''; }
+  function toggleVideo() {
+    var box = S.root.querySelector('#p-video');
+    if (!box.hidden) { box.hidden = true; box.innerHTML = ''; return; }
+    if (S.listening) stopListen();
+    if (S.coach) S.coach.stop();
+    var id = ytId(videoUrl());
+    if (!id) {
+      var q = encodeURIComponent(S.song.title + (S.song.artist ? ' ' + S.song.artist : ''));
+      box.hidden = false;
+      box.innerHTML = '<div class="pv-none">אין עדיין קישור לשיר הזה.</div>' +
+        '<a class="btn" target="_blank" rel="noopener noreferrer" href="https://www.youtube.com/results?search_query=' + q + '">🔍 חפש ביוטיוב</a>' +
+        '<input class="search" id="pv-in" placeholder="הדבק כאן קישור מיוטיוב" dir="ltr"><button class="btn gold" id="pv-save">שמור</button>';
+      box.querySelector('#pv-save').addEventListener('click', function () {
+        var v = box.querySelector('#pv-in').value.trim();
+        if (!ytId(v)) { GK.toast('זה לא נראה כמו קישור ליוטיוב'); return; }
+        GK.store.setSongPref(S.song.id, 'video', v); box.hidden = true; box.innerHTML = ''; toggleVideo();
+      });
+      return;
+    }
+    box.hidden = false;
+    box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + id + '?playsinline=1" title="השיר המקורי" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>' +
+      '<div class="pv-act"><span>המיקרופון כבוי בזמן ההאזנה.</span><button class="btn" id="pv-change">החלף קישור</button><button class="btn" id="pv-close">סגור</button></div>';
+    box.querySelector('#pv-close').addEventListener('click', function () { box.hidden = true; box.innerHTML = ''; });
+    box.querySelector('#pv-change').addEventListener('click', function () { GK.store.setSongPref(S.song.id, 'video', ''); box.hidden = true; box.innerHTML = ''; S.song.video = ''; toggleVideo(); });
+  }
+
   function startListen() {
     if (S.idx >= S.steps.length) setStep(0);
+    var vb = S.root.querySelector('#p-video'); if (vb && !vb.hidden) { vb.hidden = true; vb.innerHTML = ''; }
     S.playBtn.disabled = true;
     GK.sound.ensure();
     GK.listen.start(onResult, GK.SENS[S.set.sens].k).then(function (sr) {
@@ -245,7 +279,8 @@
       '<details class="p-coach" id="p-coachbox"><summary><span>🥁 מאמן פריטה ▾</span><span class="co-mini" id="p-mini" dir="ltr"></span></summary><div id="p-coach"></div></details>' +
       '<div class="status"><span class="step" id="p-step">0/' + steps.length + '</span><span class="hint" id="p-hint"></span><span class="heard" id="p-heard">🎤 —</span></div>' +
       '<div class="status2"><i class="lvl" title="עוצמת המיקרופון"><b id="p-lvl"></b></i><span class="cnt" id="p-cnt">פריטות: 0</span>' +
-      '<button class="btn tog" id="p-full" aria-label="מצב דפוס"></button></div>' +
+      '<button class="btn" id="p-hear" aria-label="שמע איך הפריטה נשמעת">🔊 שמע פריטה</button><button class="btn" id="p-vid" aria-label="השיר המקורי ביוטיוב">🎬 שיר מקורי</button>' +
+      '<button class="btn tog" id="p-full" aria-label="מצב דפוס"></button></div><div class="p-video" id="p-video" hidden></div>' +
       '<div class="lwrap"><div class="lyrics" id="p-lyrics">' + lyricsHtml(song) + '</div></div>' +
       '<footer class="dock"><button class="play" id="p-play">🎤 התחל</button>' +
       '<button class="btn" id="p-back" aria-label="אקורד קודם">⏮</button>' +
@@ -301,6 +336,12 @@
       senLabel();
       GK.toast('רגישות: ' + GK.SENS[S.set.sens].name);
     });
+    q('#p-hear').addEventListener('click', function () {
+      if (S.listening) { GK.toast('עצור את ההקשבה כדי לשמוע את הפריטה'); return; }
+      var on = S.coach.demo();
+      q('#p-hear').textContent = on ? '⏹ עצור' : '🔊 שמע פריטה';
+    });
+    q('#p-vid').addEventListener('click', function () { toggleVideo(); });
     q('#p-full').addEventListener('click', function () {
       S.set.full = !S.set.full;
       GK.store.setSetting('full', S.set.full);

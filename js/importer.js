@@ -75,7 +75,9 @@
     opt = opt || {};
     var mode = opt.mode || 'rtl';
     var raw = stripMarks(String(text || '')).replace(/\r/g, '').replace(/\t/g, '    ').split('\n');
-    var warnings = [], out = [], meta = { capo: 0, time: null, key: null };
+    var video = opt.video || '';
+    raw = raw.filter(function (l) { var y = /https?:\/\/(?:www\.|m\.)?(?:youtube\.com|youtu\.be)[^\s]*/i.exec(l); if (y) { video = video || y[0]; return false; } return true; });
+    var warnings = [], out = [], meta ={ capo: 0, time: null, key: null };
     var title = opt.title || '', artist = opt.artist || '';
     var i = 0, nChordLines = 0, nMerged = 0, nLyrics = 0, prevBlank = true, started = false;
 
@@ -141,12 +143,86 @@
     if (meta.time) head.push('{time: ' + meta.time + '}');
     if (meta.capo) head.push('{capo: ' + meta.capo + '}');
     if (meta.key) head.push('{key: ' + meta.key + '}');
+    if (video) head.push('{video: ' + video + '}');
     head.push('{note: יובא מטקסט שהודבק — המילים והאקורדים כפי שהם במקור}');
     return {
       song: head.join('\n') + '\n\n' + out.join('\n') + '\n',
       title: title, artist: artist, capo: meta.capo, time: meta.time, key: meta.key,
       warnings: warnings, stats: { chordLines: nChordLines, merged: nMerged, lyricLines: nLyrics }
     };
+  };
+
+
+  // ───── ייבוא מקישור: קריאה ישירה רק כשהאתר מרשה (CORS), או דרך ה-API הציבורי הרשמי של וורדפרס. בלי פרוקסי ובלי עקיפה ─────
+  var BLOCK = { P: 1, DIV: 1, LI: 1, UL: 1, OL: 1, TR: 1, TABLE: 1, SECTION: 1, ARTICLE: 1, MAIN: 1, BLOCKQUOTE: 1, H1: 1, H2: 1, H3: 1, PRE: 1, CENTER: 1 };
+  function nodeToText(root) {
+    var out = [];
+    (function walk(n, pre) {
+      if (n.nodeType === 3) { out.push(pre ? n.nodeValue : n.nodeValue.replace(/[ \t\r\n\f]+/g, ' ')); return; }
+      if (n.nodeType !== 1) return;
+      var tag = n.tagName.toUpperCase();
+      if (tag === 'BR') { out.push('\n'); return; }
+      var isPre = pre || tag === 'PRE', blk = BLOCK[tag];
+      if (blk) out.push('\n');
+      if (tag === 'TD' || tag === 'TH') out.push(' ');
+      for (var c = n.firstChild; c; c = c.nextSibling) walk(c, isPre);
+      if (tag === 'TD' || tag === 'TH') out.push(' ');
+      if (blk) out.push('\n');
+    })(root, false);
+    return out.join('').split('\n').map(function (l) { return l.replace(/\s+$/, ''); }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  function findVideo(root) {
+    var els = root.querySelectorAll('a[href], iframe[src]');
+    for (var i = 0; i < els.length; i++) {
+      var u = els[i].getAttribute('href') || els[i].getAttribute('src') || '';
+      if (/youtu\.?be/i.test(u)) return u.indexOf('//') === 0 ? 'https:' + u : u;
+    }
+    return '';
+  }
+  function pageFromHtml(html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var og = doc.querySelector('meta[property="og:title"]');
+    var title = ((og && og.getAttribute('content')) || (doc.querySelector('h1') || {}).textContent || doc.title || '').replace(/\s*[|·»]\s*[^|·»]*$/, '').trim();
+    var area = doc.querySelector('[itemprop="articleBody"], .entry-content, .post-content, article, main') || doc.body;
+    var video = findVideo(area);
+    doc.querySelectorAll('script,style,noscript,nav,header,footer,aside,form,iframe,svg,button,select,input,[class*="comment"],[class*="share"],[class*="related"],[class*="menu"],[class*="cookie"]').forEach(function (e) { e.remove(); });
+    return { title: title, text: nodeToText(area), video: video };
+  }
+  function wpPage(u) {
+    var slug = decodeURIComponent(u.pathname.replace(/\/+$/, '').split('/').pop() || '');
+    var p = u.searchParams.get('p') || u.searchParams.get('page_id');
+    var urls = p ? [u.origin + '/wp-json/wp/v2/posts/' + p + '?_fields=title,content'] : (slug ? [u.origin + '/wp-json/wp/v2/posts?slug=' + encodeURIComponent(slug) + '&_fields=title,content', u.origin + '/wp-json/wp/v2/pages?slug=' + encodeURIComponent(slug) + '&_fields=title,content'] : []);
+    return urls.reduce(function (chain, url) {
+      return chain.then(function (got) {
+        if (got) return got;
+        return fetch(url, { headers: { Accept: 'application/json' } }).then(function (r) { return r.ok ? r.json() : null; }, function () { return null; }).then(function (d) {
+          var post = Array.isArray(d) ? d[0] : d;
+          if (!post || !post.content || !post.content.rendered) return null;
+          var body = new DOMParser().parseFromString(post.content.rendered, 'text/html').body;
+          var t = new DOMParser().parseFromString('<p>' + ((post.title && post.title.rendered) || '') + '</p>', 'text/html').body.textContent;
+          return { title: t.trim(), text: nodeToText(body), video: findVideo(body) };
+        });
+      });
+    }, Promise.resolve(null));
+  }
+  /** מחזיר Promise עם {title, text, video}; נדחה עם Error(message בעברית) אם אי אפשר לקרוא את האתר */
+  GK.importLink = function (input) {
+    var m = /https?:\/\/[^\s<>"']+/i.exec(input || ''), u;
+    try { u = new URL(m ? m[0] : ''); } catch (e) { return Promise.reject(new Error('הקישור לא תקין. צריך קישור מלא שמתחיל ב-https://')); }
+    if (u.protocol !== 'https:') return Promise.reject(new Error('הקישור חייב להתחיל ב-https://'));
+    if (/(^|\.)tab4u\.com$/i.test(u.hostname)) return Promise.reject(new Error('Tab4U לא מאפשר לאפליקציה לקרוא אותו. פתח את השיר באתר, העתק את הטקסט והדבק בשלב 2.'));
+    var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, 15000);
+    return fetch(u.href, { headers: { Accept: 'text/html,text/plain' }, signal: ctl.signal }).then(function (res) {
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('האתר החזיר שגיאה (' + res.status + '). נסה להעתיק ולהדביק את הטקסט.');
+      return res.text().then(function (t) { return /text\/plain/i.test(res.headers.get('content-type') || '') ? { title: '', text: t, video: '' } : pageFromHtml(t); });
+    }, function () {
+      clearTimeout(timer);
+      return wpPage(u).then(function (r) {
+        if (r) return r;
+        throw new Error('האתר לא מאפשר קריאה ישירה מהאפליקציה. פתח אותו, העתק את הטקסט והדבק בשלב 2.');
+      });
+    });
   };
 
   /** כתובת חיפוש ב-Tab4U (נפתחת בלשונית חדשה על ידי המשתמש; האפליקציה לא קוראת את האתר) */

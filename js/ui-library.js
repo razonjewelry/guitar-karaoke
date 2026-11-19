@@ -30,7 +30,7 @@
         '<div class="lib-head"><h1>🎸 קריוקי לגיטרה<small>מילים, אקורדים ופריטה — תמיד איתך</small></h1>' +
         '<input class="search" id="lib-q" type="search" placeholder="חיפוש שיר…" autocomplete="off"></div>' +
         '<div class="lib-list" id="lib-list">' + (songs.map(cardHtml).join('') || '<div class="empty">אין שירים</div>') + '</div>' +
-        '<div class="lib-foot"><a class="btn gold" href="#/find">🎸 חיפוש והוספת שירים</a><a class="btn" href="#/learn">🥁 לימוד פריטה</a><a class="btn" href="#/edit/new">＋ שיר חדש</a>' +
+        '<div class="lib-foot"><a class="btn gold" href="#/find">🎸 חיפוש והוספת שירים</a><a class="btn gold" href="#/course">🎓 קורס גיטרה</a><a class="btn" href="#/learn">🥁 לימוד פריטה</a><a class="btn" href="#/edit/new">＋ שיר חדש</a>' +
         '<button class="btn" id="lib-exp">⬇ גיבוי</button>' +
         '<label class="btn" for="lib-imp">⬆ שחזור</label><input id="lib-imp" type="file" accept=".json,application/json" hidden>' +
         '<div class="note">השירים המובנים: טקסטים בנחלת הכלל (מקרא, תפילה, המנון), עם הרמוניה בסיסית שלי. ' +

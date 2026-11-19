@@ -22,6 +22,8 @@
         '<button class="btn gold" id="f-open">פתח ב-Tab4U ↗</button></div>' +
         '<div class="note">הייבוא האוטומטי מ-Tab4U <b>לא פעיל</b>: האתר לא מאפשר לאפליקציה לקרוא אותו, ואנחנו לא עוקפים הגנות. ' +
         'בחר שיר באתר, סמן והעתק את העמוד עם האקורדים (או השתמש ב"שתף" ← האפליקציה, אם הותקנה על המסך הראשי).</div></div>' +
+        '<div class="f-step"><b>או: הדבק קישור לדף שיר</b><div class="f-search"><input class="search" id="f-url" type="url" dir="ltr" placeholder="https://…">' +
+        '<button class="btn" id="f-fetch">🔗 הבא מהקישור</button></div><div class="note">עובד רק באתרים שמאפשרים קריאה (למשל אתרי וורדפרס). Tab4U לא מאפשר — שם מעתיקים ומדביקים. אם יש בדף קישור ליוטיוב, הוא נשמר עם השיר.</div></div>' +
         '<div class="f-step"><b>2. הדבק</b><div class="f-search"><button class="btn" id="f-paste">📋 הדבק מהלוח</button>' +
         '<label class="f-mode">יישור אקורדים: <select id="f-mode"><option value="rtl">ימין-לשמאל (עברית)</option><option value="ltr">שמאל-לימין</option></select></label></div>' +
         '<textarea class="e-area" id="f-txt" placeholder="הדבק כאן את הטקסט עם האקורדים…" spellcheck="false"></textarea>' +
@@ -29,11 +31,11 @@
         '<div class="f-step"><b>3. תצוגה מקדימה</b><div id="f-warn" class="warn"></div><div class="lyrics f-prev" id="f-prev"></div></div>' +
         '<div class="f-step f-act"><button class="btn gold" id="f-save" disabled>💾 שמור ופתח לתרגול</button><button class="btn" id="f-edit" disabled>✎ שמור וערוך</button></div>' +
         '<div class="note">המילים והאקורדים נשמרים כפי שהודבקו; האפליקציה לא ממציאה תוכן. אם משקל או פריטה לא מופיעים במקור, תתבקש לבחור פריטה לתרגול בעצמך.</div></div>';
-      var q = function (s) { return root.querySelector(s); }, cur = null, timer = 0;
+      var q = function (s) { return root.querySelector(s); }, cur = null, timer = 0, vid = '';
       function preview() {
         var txt = q('#f-txt').value;
         if (!txt.trim()) { q('#f-prev').innerHTML = ''; q('#f-warn').textContent = ''; q('#f-save').disabled = q('#f-edit').disabled = true; cur = null; return; }
-        var r = GK.importPaste(txt, { mode: q('#f-mode').value, title: q('#f-title').value.trim(), artist: q('#f-artist').value.trim() });
+        var r = GK.importPaste(txt, { video: vid, mode: q('#f-mode').value, title: q('#f-title').value.trim(), artist: q('#f-artist').value.trim() });
         cur = r;
         if (!q('#f-title').value && r.title) q('#f-title').placeholder = 'זוהה: ' + r.title;
         var song = GK.parseSong(r.song);
@@ -59,6 +61,14 @@
       q('#f-paste').addEventListener('click', function () {
         if (!navigator.clipboard || !navigator.clipboard.readText) { GK.toast('הדפדפן לא מאפשר קריאת לוח — הדבק ידנית בתיבה'); q('#f-txt').focus(); return; }
         navigator.clipboard.readText().then(function (t) { q('#f-txt').value = t; preview(); }, function () { GK.toast('אין הרשאה ללוח — הדבק ידנית בתיבה'); q('#f-txt').focus(); });
+      });
+      q('#f-fetch').addEventListener('click', function () {
+        var b = q('#f-fetch'); b.disabled = true; b.textContent = '⏳ טוען…';
+        GK.importLink(q('#f-url').value).then(function (r) {
+          q('#f-txt').value = r.text; vid = r.video || '';
+          if (r.title && !q('#f-title').value) q('#f-title').value = r.title.replace(/\s+[-–—]\s+.*$/, '');
+          preview(); GK.toast('הדף נקרא — בדוק את התצוגה המקדימה');
+        }, function (e) { GK.toast(e.message); }).then(function () { b.disabled = false; b.textContent = '🔗 הבא מהקישור'; });
       });
       q('#f-save').addEventListener('click', function () { save(false); });
       q('#f-edit').addEventListener('click', function () { save(true); });

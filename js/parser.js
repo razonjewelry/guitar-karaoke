@@ -100,7 +100,7 @@
       var d = s.trim().match(/^\{\s*([A-Za-z_]+)\s*:?\s*(.*?)\s*\}$/);
       if (d) {
         var key = d[1].toLowerCase(), val = d[2], n;
-        if (key === 'title' || key === 'artist' || key === 'note') song[key] = val;
+        if (key === 'title' || key === 'artist' || key === 'note' || key === 'video') song[key] = val;
         else if (key === 'bpm') { n = parseFloat(val); if (n >= 30 && n <= 240) song.bpm = n; else song.warnings.push('שורה ' + (ri + 1) + ': bpm חייב להיות בין 30 ל-240'); }
         else if (key === 'time') { if (TIME[val]) { song.time = val; song.timeKnown = true; T = TIME[val]; } else song.warnings.push('שורה ' + (ri + 1) + ': קצב לא נתמך ' + val + ' (4/4, 3/4, 6/8, 2/4)'); }
         else if (key === 'capo') song.capo = parseInt(val, 10) || 0;

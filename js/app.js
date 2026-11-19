@@ -3,7 +3,7 @@
   var GK = (window.GK = window.GK || {});
 
   function show(id) {
-    ['v-library', 'v-player', 'v-editor', 'v-find', 'v-learn'].forEach(function (v) {
+    ['v-library', 'v-player', 'v-editor', 'v-find', 'v-learn', 'v-course'].forEach(function (v) {
       document.getElementById(v).hidden = v !== id;
     });
   }
@@ -13,22 +13,27 @@
     if ((m = h.match(/^#\/song\/(.+)$/))) {
       var s = GK.catalog.get(decodeURIComponent(m[1]));
       if (!s) { location.hash = '#/'; return; }
+      GK.ui.course.close();
       show('v-player');
       GK.ui.player.open(s);
     } else if (h === '#/find') {
-      GK.ui.player.close(); GK.ui.learn.close();
+      GK.ui.player.close(); GK.ui.learn.close(); GK.ui.course.close();
       show('v-find');
       GK.ui.find.open();
+    } else if ((m = h.match(/^#\/course(?:\/(.+))?$/))) {
+      GK.ui.player.close(); GK.ui.learn.close();
+      show('v-course');
+      GK.ui.course.open(m[1] ? decodeURIComponent(m[1]) : '');
     } else if (h === '#/learn') {
-      GK.ui.player.close();
+      GK.ui.player.close(); GK.ui.course.close();
       show('v-learn');
       GK.ui.learn.open();
     } else if ((m = h.match(/^#\/edit\/(.+)$/))) {
-      GK.ui.player.close();
+      GK.ui.player.close(); GK.ui.course.close();
       show('v-editor');
       GK.ui.editor.open(decodeURIComponent(m[1]));
     } else {
-      GK.ui.player.close(); GK.ui.learn.close();
+      GK.ui.player.close(); GK.ui.learn.close(); GK.ui.course.close();
       show('v-library');
       GK.ui.library.render();
     }

@@ -236,6 +236,9 @@
       gated: function () { var p = sess ? sess.phase() : 'idle'; return p === 'explain' || p === 'count'; },
       /** התקפת צליל בזמן ctx של הצליל; מחזיר את תוצאת השיפוט (או null) */
       feedOnset: function (tCtx) { return sess && judge && sess.phase() === 'play' ? judge.onset(tCtx) : null; },
+      /** שמיעת הפריטה (הדגמה עם צליל פריטה ומטרונום), בלי הסבר קולי */
+      demo: function () { if (sess && sess.isActive()) { stop(); return false; } start(); return true; },
+      stats: function () { return judge ? judge.stats : null; },
       stop: stop,
       destroy: function () { dead = true; cancelAnimationFrame(raf); if (sess) sess.stop(); if (host.parentNode) host.parentNode.removeChild(host); }
     };
