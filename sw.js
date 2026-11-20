@@ -1,6 +1,6 @@
 /* Service worker: האפליקציה נשמרת במכשיר ועובדת בלי אינטרנט.
    אסטרטגיה "רשת קודם": כשיש אינטרנט תמיד מקבלים את הגרסה העדכנית (עם timeout של 4 שניות), ואם אין — מהמטמון. */
-var VERSION = 'gk-v18';
+var VERSION = 'gk-v19';
 var FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/styles.css',
   'js/util.js', 'js/chords-db.js', 'js/parser.js', 'js/store.js', 'js/fft.js', 'js/chroma.js', 'js/strum.js', 'js/stepper.js', 'js/listen.js',

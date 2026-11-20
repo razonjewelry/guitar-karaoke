@@ -144,8 +144,28 @@
     var doc = new DOMParser().parseFromString(html, 'text/html');
     doc.querySelectorAll('script,style,noscript,iframe,svg,button,select,input,[class*="bracket"]').forEach(function (e) { e.remove(); });
     var marked = 0;
+    // אתרים "מובנים" (למשל נגנו): כל מילה בתא משלה — [נתיב אקורד][מילה]. מאחדים כל תא ל-"[Am]מילה " באותה שורה.
+    var isCh = function (e) { var t = (e.getAttribute('data-chord') || e.textContent || '').trim(); return !!t && t.length <= 12 && isChordTok(t); };
+    var cellOf = function (e) {
+      if (e.children.length !== 2) return null;
+      var lane = e.children[0], word = e.children[1], lt = lane.textContent.trim(), wt = word.textContent.trim();
+      if (!wt || isChordTok(wt) || (lt && !isChordTok(lt))) return null;
+      return { c: lt ? normChord((lane.querySelector('[data-chord]') || lane).getAttribute('data-chord') || lt) : '', w: word.textContent.replace(/\s+/g, ' ').trim() };
+    };
+    var cells = [];
+    doc.querySelectorAll('body *').forEach(function (e) {
+      var c = cellOf(e); if (!c || !e.parentElement) return;
+      var sib = 0; for (var k = 0; k < e.parentElement.children.length; k++) if (cellOf(e.parentElement.children[k])) sib++;
+      if (sib >= 2 || (c.c && e.parentElement.children.length === 1)) cells.push([e, c]);
+    });
+    cells.forEach(function (p) {
+      if (!p[0].parentNode) return;
+      if (p[1].c) marked++;
+      p[0].replaceWith(doc.createTextNode((p[1].c ? '\u0001' + p[1].c + '\u0002' : '') + p[1].w + ' '));
+    });
     doc.querySelectorAll('body *').forEach(function (el) {
       if (el.children.length) return;
+      if (el.getAttribute('data-chord') && isCh(el) && !/\u0001/.test(el.textContent)) { el.textContent = '\u0001' + normChord(el.getAttribute('data-chord').trim()) + '\u0002'; marked++; return; }
       var t = (el.textContent || '').trim();
       if (!t || t.length > 12 || !isChordTok(t)) return;
       // אקורד שהוא אלמנט משלו (span/b/sup…). מסמנים אותו כאקורד בתוך השורה.
