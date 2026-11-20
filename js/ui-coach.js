@@ -202,15 +202,15 @@
         if (sess && sess.isActive()) { GK.toast('ההסבר הקולי נשמע רק כשלא מנגנים'); return; }
         var s2 = ensureSession(); if (s2) s2.explain();
       }
-      else if (a === 'bm') setBpm(set.bpm - 5);
-      else if (a === 'bp') setBpm(set.bpm + 5);
+      else if (a === 'bm') { setBpm(set.bpm - 5); if (o.onBpm) o.onBpm(set.bpm); }
+      else if (a === 'bp') { setBpm(set.bpm + 5); if (o.onBpm) o.onBpm(set.bpm); }
       else if (a === 'prev' || a === 'next') {
         if (sess && sess.isActive()) return;
         var n = pattern.steps.length; manual = manual < 0 ? 0 : (manual + (a === 'next' ? 1 : n - 1)) % n;
         paint(manual, true); showAction(pattern.steps[manual]); if (el.stepEl) el.stepEl.textContent = manual + 1;
         if (set.speakBeforePlaying && GK.voice.available()) GK.voice.say(GK.pat.WORD[pattern.steps[manual].action], { rate: set.voiceRate });
       }
-      else if (t.hasAttribute('data-b')) setBpm(+t.getAttribute('data-b'));
+      else if (t.hasAttribute('data-b')) { setBpm(+t.getAttribute('data-b')); if (o.onBpm) o.onBpm(set.bpm); }
     });
     el.speeds.innerHTML = SPEEDS.map(function (b) { return '<button class="btn tog" data-b="' + b + '">' + b + '</button>'; }).join('');
     el.sel.addEventListener('change', function () { setPattern(el.sel.value); });
@@ -223,13 +223,15 @@
       });
     });
 
-    pickInitial(); drawPattern(); setBpm(set.bpm);
+    pickInitial(); drawPattern(); setBpm(o.bpm || set.bpm);
     raf = requestAnimationFrame(frame);
 
     return {
       el: host,
       getPattern: function () { return pattern; },
       getMeter: function () { return meter; },
+      getBpm: function () { return set.bpm; },
+      setBpm: function (b) { setBpm(b); },
       isActive: function () { return !!(sess && sess.isActive()); },
       phase: function () { return sess ? sess.phase() : 'idle'; },
       /** האם התוצאות מהמיקרופון צריכות להתעלם (בזמן הסבר קולי / ספירה מקדימה) */

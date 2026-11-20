@@ -291,12 +291,50 @@
     S.lvl.style.width = '0';
   }
 
+  /**
+   * הדגמה: איך השיר אמור להישמע. גיטרה מסונתזת מנגנת את האקורדים לפי הסדר, תיבה לכל אקורד,
+   * בפריטה ובקצב שבמאמן — והשורה הנוכחית מסומנת כמו בקריוקי. מתחיל מהאקורד הנוכחי.
+   */
+  function startDemo() {
+    if (!S || S.demo) return;
+    if (S.listening) stopListen();
+    if (S.coach) S.coach.stop();
+    if (S.audio) S.audio.pause();
+    var ctx = GK.sound.ensure(); if (!ctx) { GK.toast('הדפדפן לא תומך באודיו'); return; }
+    var pat = S.coach.getPattern(), m = GK.pat.meterOf(pat), bpm = S.coach.getBpm();
+    var beat = 60 / (bpm * (m.pulse || 1)), bar = beat * pat.beatsPerBar;
+    var start = S.idx >= S.steps.length ? 0 : S.idx, t0 = ctx.currentTime + 0.25, next = start;
+    var D = S.demo = { timers: [] };
+    function pump() {
+      if (S.demo !== D) return;
+      while (next < S.steps.length && t0 + (next - start) * bar < ctx.currentTime + 1.2) {
+        var at = t0 + (next - start) * bar, ch = S.steps[next].chord, i = next;
+        pat.steps.forEach(function (st) { GK.sound.guitar(at + st.beat * beat, ch, st.action, st.accent); });
+        D.timers.push(setTimeout(function () { if (S && S.demo === D) setStep(i); }, Math.max(0, (at - ctx.currentTime) * 1000)));
+        next++;
+      }
+      if (next >= S.steps.length) { D.timers.push(setTimeout(function () { if (S && S.demo === D) stopDemo(); }, Math.max(0, (t0 + (next - start) * bar - ctx.currentTime) * 1000 + 600))); return; }
+      D.pump = setTimeout(pump, 300);
+    }
+    pump();
+    S.root.querySelector('#p-demo').textContent = '⏹';
+    GK.toast('🔊 הדגמה: ' + bpm + ' BPM, תיבה לכל אקורד. לחץ ⏹ לעצירה');
+  }
+  function stopDemo() {
+    if (!S || !S.demo) return;
+    clearTimeout(S.demo.pump); S.demo.timers.forEach(clearTimeout); S.demo = null;
+    GK.sound.hush();
+    var b = S.root.querySelector('#p-demo'); if (b) b.textContent = '🔊';
+  }
+
   function jumpToLine(i) {
     for (var k = 0; k < S.steps.length; k++) if (S.steps[k].line >= i) { setStep(k); return; }
   }
 
   function close() {
     if (!S) return;
+    stopDemo();
+    if (S.audio) S.audio.pause();
     GK.chroma.setCapo(0);
     GK.listen.stop();
     if (S.coach) S.coach.destroy();
@@ -323,17 +361,20 @@
       '<div class="chordbar" id="p-chords">' + song.chords.map(function (c) {
         return '<div class="cc" data-c="' + esc(c) + '">' + GK.chordSvg(c) + '<span>' + esc(c) + '</span></div>';
       }).join('') + '</div>' +
+      '<div class="p-info" id="p-info" hidden></div>' +
       '<div class="nownext" hidden><b id="p-now">—</b><b id="p-next">—</b></div>' +
       '<details class="p-coach" id="p-coachbox"><summary><span>🥁 מאמן פריטה ▾</span><span class="co-mini" id="p-mini" dir="ltr"></span></summary><div id="p-coach"></div></details>' +
       '<div class="status"><span class="step" id="p-step">0/' + steps.length + '</span><span class="hint" id="p-hint"></span><span class="heard" id="p-heard">🎤 —</span></div>' +
       '<div class="p-tools" id="p-tools" hidden>' +
+      '<button class="btn" id="p-orig" hidden>🎧 קטע מהשיר המקורי</button>' +
       '<button class="btn" id="p-hear" aria-label="שמע איך הפריטה נשמעת">🔊 שמע פריטה</button><button class="btn" id="p-vid" aria-label="השיר המקורי ביוטיוב">🎬 שיר מקורי</button>' +
       '<button class="btn tog" id="p-full" aria-label="מצב דפוס"></button><button class="btn tog" id="p-sens" aria-label="רגישות המיקרופון"></button><button class="btn tog" id="p-font" aria-label="גודל גופן">Aa</button>' +
-      '<span class="pill" dir="ltr"><button id="p-capo-" aria-label="קאפו פחות">−</button><span id="p-capo">קאפו ' + capoNow + '</span><button id="p-capo+" aria-label="קאפו יותר">＋</button></span>' +
+      '<span class="pill" dir="ltr"><button id="p-capo-dn" aria-label="קאפו פחות">−</button><span id="p-capo">קאפו ' + capoNow + '</span><button id="p-capo-up" aria-label="קאפו יותר">＋</button></span>' +
       '<span class="cnt" id="p-cnt">פריטות: 0</span><i class="lvl" title="עוצמת המיקרופון"><b id="p-lvl"></b></i></div>' +
       '<div class="p-video" id="p-video" hidden></div>' +
       '<div class="lwrap"><div class="lyrics" id="p-lyrics">' + lyricsHtml(song) + '</div></div>' +
       '<footer class="dock"><button class="play" id="p-play">🎤 התחל</button>' +
+      '<button class="btn" id="p-demo" aria-label="הדגמה: איך השיר אמור להישמע">🔊</button>' +
       '<button class="btn" id="p-restart" aria-label="התחל מההתחלה">↺</button><button class="btn" id="p-back" aria-label="אקורד קודם">⏮</button>' +
       '<button class="btn" id="p-skip" aria-label="דלג על האקורד">⏭</button>' +
       '<button class="btn tog" id="p-more" aria-label="עוד כלים">⋯</button></footer>';
@@ -350,14 +391,59 @@
     S.pos = GK.strumPositions(first);
     var prefs = GK.store.songPrefs(song.id);
     var verified = (song.strumVerified && song.strumDeclared) ? GK.pat.fromLegacy(first, song.time, 'verified', 'src-' + song.id, 'פריטת המקור') : null;
-    S.coach = GK.ui.createCoach(q('#p-coach'), {
-      mini: q('#p-mini'),
-      mode: 'song', meter: song.timeKnown ? song.time : (prefs.time || '4/4'), timeKnown: song.timeKnown, verified: verified,
-      patternId: prefs.patternId,
-      onPattern: function (p) { GK.store.setSongPref(song.id, 'patternId', p.id); },
-      onMeter: function (m) { GK.store.setSongPref(song.id, 'time', m); },
-      onPhase: function (ph) { if (ph === 'idle') setHint(S.steps[S.idx] ? 'נגן: <b>' + esc(S.steps[S.idx].chord) + '</b>' : ''); else if (ph === 'explain') setHint('מקשיבים להסבר…'); else if (ph === 'count') setHint('ספירה…'); }
+    // שירים שיובאו לפני שהפריטה מהאתר נשמרה כפריטה אמיתית: לוקחים אותה מההערה "פריטה לפי המקור: ↓ ↓ ↑…"
+    var srcNote = !verified && /פריטה לפי המקור:\s*([↓↑X ]+)/.exec(song.note || '');
+    if (srcNote && GK.strumToGrid) {
+      var grid = GK.strumToGrid(srcNote[1].replace(/\s/g, '').split('').map(function (c) { return c === '↓' ? 'D' : c === '↑' ? 'U' : 'X'; }));
+      if (grid) verified = GK.pat.fromLegacy(grid.split(' '), '4/4', 'verified', 'src-' + song.id, 'פריטת המקור');
+    }
+    function makeCoach(c) {
+      if (S.coach) S.coach.destroy();
+      S.coach = GK.ui.createCoach(q('#p-coach'), {
+        mini: q('#p-mini'),
+        mode: 'song', meter: c.meter, timeKnown: c.timeKnown, verified: c.verified, bpm: c.bpm,
+        patternId: c.patternId,
+        onPattern: function (p) { GK.store.setSongPref(song.id, 'patternId', p.id); GK.store.setSongPref(song.id, 'patternManual', 1); },
+        onMeter: function (m) { GK.store.setSongPref(song.id, 'time', m); },
+        onBpm: function (b) { GK.store.setSongPref(song.id, 'bpm', b); },
+        onPhase: function (ph) { if (ph === 'idle') setHint(S.steps[S.idx] ? 'נגן: <b>' + esc(S.steps[S.idx].chord) + '</b>' : ''); else if (ph === 'explain') setHint('מקשיבים להסבר…'); else if (ph === 'count') setHint('ספירה…'); }
+      });
+    }
+    var known = song.timeKnown || !!verified;
+    makeCoach({
+      meter: song.timeKnown ? song.time : verified ? '4/4' : (prefs.time || '4/4'), timeKnown: known, verified: verified,
+      patternId: prefs.patternId, bpm: prefs.bpm || (song.builtin || song.bpmKnown ? song.bpm : 0)
     });
+    // קצב, משקל ופריטה מהשיר המקורי (ניתוח קטע של 30 שניות) — לשירים שהמקור לא אמר מה הפריטה
+    function showInfo(inf) {
+      var box = q('#p-info'); if (!S || !box) return;
+      var pat = S.coach.getPattern();
+      box.hidden = false;
+      if (!inf.found) { box.innerHTML = '🎵 לא מצאתי את השיר המקורי לניתוח קצב — בחרתי פריטה רגילה. <button class="lnk" id="p-info-re">נסה שוב</button>'; }
+      else box.innerHTML = '🎵 <b>' + (S.coach.getBpm ? S.coach.getBpm() : inf.bpm) + ' BPM · <bdi>' + S.coach.getMeter() + '</bdi></b> · פריטה: <b dir="ltr">' + GK.pat.symbolText(pat) + '</b>' +
+        '<small>' + (verified ? 'הפריטה מהאתר שממנו העתקת; הקצב' : esc(inf.why || '') + ' — זוהה') + ' מניתוח השיר המקורי</small>' +
+        (inf.alt ? ' <button class="lnk" id="p-info-alt">מרגיש מהר/לאט מדי? ' + inf.alt + '</button>' : '');
+      var re = q('#p-info-re'); if (re) re.onclick = function () { box.innerHTML = '🎵 מנתח…'; GK.songInfo.forSong(song, true).then(apply, function () { box.innerHTML = '🎵 אין חיבור לרשת'; }); };
+      var al = q('#p-info-alt'); if (al) al.onclick = function () { var b = inf.alt; inf.alt = inf.bpm; inf.bpm = b; GK.songInfo.set(song.id, inf); GK.store.setSongPref(song.id, 'bpm', b); S.coach.setBpm(b); showInfo(inf); };
+      var orig = q('#p-orig'); if (orig && inf.preview) orig.hidden = false;
+    }
+    function apply(inf) {
+      if (!S || S.song !== song) return;
+      S.info = inf;
+      if (inf.found) {
+        var p2 = GK.store.songPrefs(song.id), useDet = !verified && !song.timeKnown && !p2.patternManual;
+        makeCoach({
+          meter: song.timeKnown ? song.time : verified ? '4/4' : (useDet ? inf.meter : (p2.time || inf.meter)), timeKnown: true, verified: verified,
+          patternId: useDet ? inf.patternId : p2.patternId, bpm: p2.bpm || inf.bpm
+        });
+      }
+      showInfo(inf);
+    }
+    if (!song.builtin && GK.songInfo) {
+      var cachedInf = GK.songInfo.cached(song.id);
+      if (cachedInf) apply(cachedInf);
+      else { q('#p-info').hidden = false; q('#p-info').textContent = '🎵 מאזין לשיר המקורי כדי לזהות קצב ופריטה…'; GK.songInfo.forSong(song).then(apply, function () { if (S) { q('#p-info').textContent = '🎵 לא הצלחתי לנתח עכשיו (אין רשת?)'; } }); }
+    }
     Array.prototype.forEach.call(root.querySelectorAll('.cc'), function (c) { S.cards[c.getAttribute('data-c')] = c; });
     Array.prototype.forEach.call(S.lyr.querySelectorAll('.ln'), function (ln) {
       S.lines.push(ln);
@@ -375,15 +461,15 @@
       var ln = e.target.closest ? e.target.closest('.ln') : null;
       if (ln) jumpToLine(parseInt(ln.getAttribute('data-i'), 10));
     });
-    S.playBtn.addEventListener('click', function () { if (S.listening) stopListen(); else startListen(); });
+    S.playBtn.addEventListener('click', function () { stopDemo(); if (S.listening) stopListen(); else startListen(); });
     function setCapo(n) {
       n = Math.max(0, Math.min(11, n)); capoNow = n; GK.chroma.setCapo(n);
       GK.store.setSongPref(song.id, 'capo', n); q('#p-capo').textContent = 'קאפו ' + n;
       if (S.matcher) S.matcher.reset(false);
       GK.toast(n ? 'קאפו ' + n + ': המיקרופון מצפה לצליל גבוה ב-' + n + ' חצאי טון מצורת האקורד' : 'בלי קאפו');
     }
-    q('#p-capo-').addEventListener('click', function () { setCapo(capoNow - 1); });
-    q('#p-capo\+').addEventListener('click', function () { setCapo(capoNow + 1); });
+    q("#p-capo-dn").addEventListener('click', function () { setCapo(capoNow - 1); });
+    q('#p-capo-up').addEventListener('click', function () { setCapo(capoNow + 1); });
     q('#p-more').addEventListener('click', function () { var t = q('#p-tools'); t.hidden = !t.hidden; q('#p-more').classList.toggle('on', !t.hidden); });
     q('#p-restart').addEventListener('click', function () {
       if (S.coach) S.coach.stop();
@@ -406,6 +492,15 @@
       q('#p-hear').textContent = on ? '⏹ עצור' : '🔊 שמע פריטה';
     });
     q('#p-vid').addEventListener('click', function () { toggleVideo(); });
+    q('#p-demo').addEventListener('click', function () { if (S.demo) stopDemo(); else startDemo(); });
+    q('#p-orig').addEventListener('click', function () {
+      if (!S.info || !S.info.preview) return;
+      if (S.audio && !S.audio.paused) { S.audio.pause(); q('#p-orig').textContent = '🎧 קטע מהשיר המקורי'; return; }
+      stopDemo();
+      S.audio = S.audio || new Audio(S.info.preview);
+      S.audio.onended = function () { q('#p-orig').textContent = '🎧 קטע מהשיר המקורי'; };
+      S.audio.play().then(function () { q('#p-orig').textContent = '⏹ עצור את המקור'; }, function () { GK.toast('לא הצלחתי לנגן את הקטע'); });
+    });
     q('#p-full').addEventListener('click', function () {
       S.set.full = !S.set.full;
       GK.store.setSetting('full', S.set.full);

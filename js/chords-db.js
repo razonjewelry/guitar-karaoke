@@ -33,8 +33,24 @@
   /** מוצא צורה לשם אקורד (גם לאקורד עם בס, כמו Am/E -> Am). אחרת null. */
   GK.shapeFor = function (name) {
     if (!name) return null;
-    return S[name] || S[String(name).replace(/\/.*$/, '')] || null;
+    return S[name] || S[String(name).replace(/\/.*$/, '')] || barreShape(String(name).replace(/\/.*$/, '')) || null;
   };
+
+  // אקורד בלי צורה פתוחה (F#, Bb, C#m…): צורת ברה — צורת E (בס על מיתר 6) או צורת A (בס על מיתר 5), הנמוכה מביניהן.
+  var NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  var E_SH = { '': [0, 2, 2, 1, 0, 0], m: [0, 2, 2, 0, 0, 0], '7': [0, 2, 0, 1, 0, 0], m7: [0, 2, 0, 0, 0, 0] };
+  var A_SH = { '': [null, 0, 2, 2, 2, 0], m: [null, 0, 2, 2, 1, 0], '7': [null, 0, 2, 0, 2, 0], m7: [null, 0, 2, 0, 1, 0] };
+  function barreShape(n) {
+    var m = /^([A-G])([#b]?)(m7|m|7|maj|min)?$/.exec(n);
+    if (!m) return null;
+    var q = m[3] === 'maj' ? '' : m[3] === 'min' ? 'm' : (m[3] || ''), r = (NOTE[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) + 12) % 12;
+    var fe = (r - 4 + 12) % 12, fa = (r - 9 + 12) % 12;
+    var useE = fe && (fe <= fa || !fa), fret = useE ? fe : fa, base = useE ? E_SH[q] : A_SH[q];
+    if (!fret) return null;
+    var f = base.map(function (x) { return x === null ? null : x + fret; });
+    return { f: f, n: f.map(function (x) { return x === null ? 0 : x === fret ? 1 : Math.min(4, x - fret + 1 + (x - fret === 2 ? 1 : 0)); }), barre: { fret: fret, from: useE ? 0 : 1, to: 5 } };
+  }
+  GK.barreShape = barreShape;
 
   /** מחזיר מחרוזת SVG לדיאגרמת אקורד (או תיבת טקסט אם אין צורה) */
   GK.chordSvg = function (name) {
@@ -44,9 +60,15 @@
     var x = function (i) { return X0 + i * GAP; };
     var o = ['<svg viewBox="0 0 60 80" class="cd" role="img" aria-label="' + GK.esc(name) + '">'];
     var i, f;
+    // צורה גבוהה בצוואר (ברה בסריג 5 וכו'): מציגים מהסריג הנמוך שבה ורושמים את מספרו בצד
+    var frs = sh.f.filter(function (v) { return v; }), off = Math.max.apply(null, frs.concat([0])) > 4 ? Math.min.apply(null, frs) - 1 : 0;
+    if (off) {
+      sh = { f: sh.f.map(function (v) { return v ? v - off : v; }), n: sh.n, barre: sh.barre && { fret: sh.barre.fret - off, from: sh.barre.from, to: sh.barre.to } };
+      o.push('<text class="fn" x="2" y="' + (Y0 + 0.5 * FG + 2.4) + '" style="font-size:7px">' + (off + 1) + '</text>');
+    }
     for (i = 0; i < 6; i++) o.push('<line class="s" x1="' + x(i) + '" y1="' + Y0 + '" x2="' + x(i) + '" y2="' + (Y0 + FG * 4) + '"/>');
     for (f = 0; f <= 4; f++) {
-      o.push('<line class="' + (f === 0 ? 'nut' : 'f') + '" x1="' + x(0) + '" y1="' + (Y0 + f * FG) + '" x2="' + x(5) + '" y2="' + (Y0 + f * FG) + '"/>');
+      o.push('<line class="' + (f === 0 && !off ? 'nut' : 'f') + '" x1="' + x(0) + '" y1="' + (Y0 + f * FG) + '" x2="' + x(5) + '" y2="' + (Y0 + f * FG) + '"/>');
     }
     for (i = 0; i < 6; i++) {
       if (sh.f[i] === null) o.push('<text class="x" x="' + x(i) + '" y="13">×</text>');

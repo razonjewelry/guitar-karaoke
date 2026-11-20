@@ -288,3 +288,8 @@ details code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; 
 
 .f-lib { display: flex; flex-wrap: wrap; gap: 6px; max-height: 26vh; overflow-y: auto; }
 .f-lib .btn { padding: 5px 10px; font-size: 13px; }
+
+/* קצב ופריטה שזוהו מהשיר המקורי */
+.p-info { margin: 2px 12px 4px; padding: 6px 10px; border-radius: 10px; background: rgba(230,188,98,.08); font-size: 13px; line-height: 1.5; }
+.p-info small { display: block; opacity: .7; font-size: 11.5px; }
+.p-info .lnk { background: none; border: 0; color: var(--gold); text-decoration: underline; font: inherit; font-size: 12px; padding: 0 2px; cursor: pointer; }

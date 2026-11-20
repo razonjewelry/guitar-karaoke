@@ -25,8 +25,54 @@
     return noise;
   }
 
+  // ───── צליל גיטרה (Karplus-Strong): מיתר מדומה לכל תו, נשמר במטמון. לפי צורת האקורד מ-chords-db ─────
+  var OPEN = [40, 45, 50, 55, 59, 64], ks = {};
+  function pluck(midi) {
+    if (ks[midi]) return ks[midi];
+    var sr = ctx.sampleRate, f = 440 * Math.pow(2, (midi - 69) / 12), P = Math.round(sr / f), len = Math.round(sr * 2.2);
+    var b = ctx.createBuffer(1, len, sr), d = b.getChannelData(0), ring = new Float32Array(P), i;
+    for (i = 0; i < P; i++) ring[i] = Math.random() * 2 - 1;
+    var decay = midi < 50 ? 0.997 : 0.995;
+    for (i = 0; i < len; i++) {                                   // מסנן ממוצע עם דעיכה = מיתר שדועך באופן טבעי
+      var k = i % P;
+      d[i] = ring[k];
+      ring[k] = decay * 0.5 * (ring[k] + ring[(k + 1) % P]);
+    }
+    ks[midi] = b; return b;
+  }
+  var ringing = [];
+  function chordNotes(name) {
+    var sh = GK.shapeFor && GK.shapeFor(name);
+    if (!sh) return [];
+    var capo = (GK.chroma && GK.chroma.getCapo) ? GK.chroma.getCapo() : 0;
+    return sh.f.map(function (fr, s) { return fr === null ? null : OPEN[s] + fr + capo; });
+  }
+
   GK.sound = {
     ensure: ensure,
+    /**
+     * פריטת אקורד בגיטרה מסונתזת. action: down (מהבס למעלה, כל המיתרים) | up (מהגבוה למטה, 4 מיתרים עליונים)
+     * | muted (נקישה חסומה) | rest (שקט). פריטה חדשה משתיקה את הקודמת (כמו יד על המיתרים).
+     */
+    guitar: function (t, chord, action, accent) {
+      if (!ctx || action === 'rest') return;
+      var notes = chordNotes(chord);
+      if (!notes.length || action === 'muted') { GK.sound.strum(t, 'muted', accent); return; }
+      ringing.forEach(function (g) { try { g.gain.setTargetAtTime(0.0001, t, 0.02); } catch (e) {} });
+      ringing = [];
+      var idx = [0, 1, 2, 3, 4, 5].filter(function (s) { return notes[s] !== null; });
+      if (action === 'up') idx = idx.slice(-4).reverse();
+      var vol = (action === 'up' ? 0.16 : 0.22) * (accent ? 1.3 : 1);
+      idx.forEach(function (s, j) {
+        var src = ctx.createBufferSource(), g = ctx.createGain(), at = t + j * (action === 'up' ? 0.009 : 0.013);
+        src.buffer = pluck(notes[s]);
+        g.gain.setValueAtTime(vol, at);
+        src.connect(g); g.connect(ctx.destination);
+        src.start(at); src.stop(at + 2.2);
+        ringing.push(g);
+      });
+    },
+    hush: function () { var t = ctx ? ctx.currentTime : 0; ringing.forEach(function (g) { try { g.gain.setTargetAtTime(0.0001, t, 0.03); } catch (e) {} }); ringing = []; },
     ctx: function () { return ctx; },
     now: function () { return ctx ? ctx.currentTime : 0; },
     /** kind: 'count' | 'beat' */

@@ -91,7 +91,7 @@
     return { ch: ch, rest: rest, strong: false };
   }
   function preprocess(text) {
-    var lines = text.replace(/\r/g, '').split('\n'), out = [], strumNote = '', strong = 0, known = {};
+    var lines = text.replace(/\r/g, '').split('\n'), out = [], strumNote = '', strumGrid = '', strong = 0, known = {};
     // סבב 1: סופרים אקורדים דבוקים ודאיים כדי להחליט אם הטקסט בכלל בפורמט הזה, ואוספים את האקורדים של השיר
     lines.forEach(function (l) {
       var lm = l.trim().match(LABEL), cl = chordLine(l) ? l : (lm && chordLine(lm[2].replace(/\([^)]*\)/g, '')) ? lm[2] : null);
@@ -108,6 +108,7 @@
       if ((m = t.match(/^strum(?:ming)?(?:\s*pattern)?\s*[:\-]?\s*([dDuUxX][dDuUxX\/\s,.\-–]*)$/i))) {
         var seq = m[1].toUpperCase().match(/[DUX]/g) || [];
         strumNote = 'פריטה לפי המקור: ' + seq.map(function (x) { return x === 'D' ? '↓' : x === 'U' ? '↑' : 'X'; }).join(' ');
+        strumGrid = strumToGrid(seq);
         return;
       }
       if ((m = t.match(LABEL)) && chordLine(m[2].replace(/\(\s*\d+\s*x\s*\)|\(\s*x\s*\d+\s*\)/ig, ''))) {
@@ -131,8 +132,24 @@
         return res.replace(MID, function (all, a, ch) { if (!known[normChord(ch)]) return all; glued++; return a + '[' + normChord(ch) + ']'; });
       }).join(''));
     });
-    return { text: out.join('\n'), strumNote: strumNote, glued: glued };
+    return { text: out.join('\n'), strumNote: strumNote, strumGrid: strumGrid, glued: glued };
   }
+
+  /**
+   * רצף פריטות מהאתר ("d/d/u/u/d/u") → רשת שמיניות של תיבת 4/4. האתרים כותבים רק את סדר הפריטות;
+   * המיקום בתיבה נקבע לפי הדפוס המוכר: 6 פריטות D D U U D U = "D - D U - U D U" (הפריטה הנפוצה בעולם).
+   */
+  function strumToGrid(seq) {
+    var s = seq.join('');
+    var KNOWN = { DDUUDU: 'D - D U - U D U', DUDU: 'D - D U - - D U', DDU: 'D - D U - - - -', DDDU: 'D - D - D - D U', DDUDU: 'D - D U - - D U', DUUDU: 'D - - U - U D U' };
+    if (KNOWN[s]) return KNOWN[s];
+    if (seq.length === 8) return seq.join(' ');
+    if (seq.length === 4 && s.indexOf('U') < 0) return 'D - D - D - D -';
+    if (!seq.length || seq.length > 8) return '';
+    var g = seq.slice(); while (g.length < 8) g.push('-');                    // לא מוכר: לפי הסדר ובסוף מנוחות
+    return g.join(' ');
+  }
+  GK.strumToGrid = strumToGrid;
 
   /**
    * הדבקה עם עיצוב (text/html מהלוח): באתרי אקורדים האקורד הוא אלמנט נפרד בתוך שורת המילים
@@ -225,6 +242,7 @@
       if (opt.title) song = song.replace(/^\{title: .*\}/, '{title: ' + opt.title + '}');
       if (opt.artist && !cp.artist) song = song.replace(/^(\{title: .*\})/, '$1\n{artist: ' + opt.artist + '}');
       if (pre.strumNote) song = song.replace(/\{note: /, '{note: ' + pre.strumNote + ' · ');
+      if (pre.strumGrid) song = song.replace(/^(\{title: .*\})/, '$1' + (/\{time:/.test(song) ? '' : '\n{time: 4/4}') + '\n{strum: ' + pre.strumGrid + '}\n{strumsrc: original}');
       if (opt.video) song = song.replace(/\{note: /, '{video: ' + opt.video + '}\n{note: ');
       return { song: song, title: cp.title, artist: cp.artist, capo: 0, time: null, key: null, warnings: pre.glued ? ['האקורדים היו צמודים למילים (כך מעתיקים מאתרים כמו chordie) — הופרדו אוטומטית. עבור על התצוגה המקדימה.'] : [], stats: { chordLines: 0, merged: 0, lyricLines: 0, glued: pre.glued } };
     }
@@ -295,7 +313,8 @@
     var head = [];
     head.push('{title: ' + (title || 'שיר מיובא') + '}');
     if (artist) head.push('{artist: ' + artist + '}');
-    if (meta.time) head.push('{time: ' + meta.time + '}');
+    if (meta.time || pre.strumGrid) head.push('{time: ' + (meta.time || '4/4') + '}');
+    if (pre.strumGrid) { head.push('{strum: ' + pre.strumGrid + '}'); head.push('{strumsrc: original}'); }
     if (meta.capo) head.push('{capo: ' + meta.capo + '}');
     if (meta.key) head.push('{key: ' + meta.key + '}');
     if (video) head.push('{video: ' + video + '}');

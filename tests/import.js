@@ -74,6 +74,19 @@ ok(GK.parseSong(r6.song).lines[0].segs[0].c === 'Am' || GK.parseSong(r6.song).li
   ok(a0.every((x, i) => Math.abs(x - g2[i]) < 1e-9), 'קאפו 2: תבנית G = תבנית A');
   ok(GK.chroma.getCapo() === 0, 'קאפו חוזר ל-0');
 }
+// פריטה מהאתר נכנסת כפריטה אמיתית (לא רק הערה), וצורות ברה לאקורדים בלי צורה פתוחה
+{
+  const st = GK.importPaste('strum d/d/u/u/d/u\nAmWalking down the road, Gtonight\nFI saw the light, Ehere\nAmmorning comes again', { title: 'Strum test' });
+  const ss = GK.parseSong(st.song);
+  ok(ss.strumDeclared && ss.strumVerified && ss.lines[0].strum.join(' ') === 'D - D U - U D U', 'strum d/d/u/u/d/u → D - D U - U D U מהמקור: ' + ss.lines[0].strum.join(' '));
+  ok(ss.timeKnown && ss.time === '4/4', 'עם פריטה מהמקור המשקל 4/4');
+  ok(GK.strumToGrid(['D','U','D','U','D','U','D','U']) === 'D U D U D U D U', 'רצף של 8 נשמר כמו שהוא');
+  const fs = GK.barreShape('F#'), bb = GK.barreShape('Bb'), cs = GK.barreShape('C#m');
+  ok(fs && fs.f.join() === '2,4,4,3,2,2', 'F# ברה בסריג 2: ' + (fs && fs.f.join()));
+  ok(bb && bb.f.join() === ',1,3,3,3,1', 'Bb צורת A בסריג 1: ' + (bb && bb.f.join()));
+  ok(cs && cs.f.join() === ',4,6,6,5,4', 'C#m צורת Am בסריג 4: ' + (cs && cs.f.join()));
+  ok(GK.shapeFor('E').f[0] === 0 && GK.shapeFor('Am').f[0] === null, 'אקורדים פתוחים לא מוחלפים');
+}
 // כתובת חיפוש
 ok(GK.tab4uSearchUrl('אמן שיר').startsWith('https://www.tab4u.com/resultsSimple?tab=songs&q=%D7'), 'כתובת חיפוש Tab4U');
 console.log(pass + ' passed, ' + fail + ' failed');
