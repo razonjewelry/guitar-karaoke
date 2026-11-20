@@ -18,13 +18,21 @@
     return '<span class="seg"><span class="ch">' + (s.c ? esc(s.c) : '&nbsp;') + '</span><span class="tx">' + (words || '&nbsp;') + '</span></span>';
   }
 
+  /** שיר באנגלית מוצג משמאל לימין: האקורד מעל תחילת המילה, והפסיקים בסוף השורה ולא בתחילתה */
+  function songDir(song) {
+    var t = song.lines.map(function (l) { return l.segs.map(function (s) { return s.t; }).join(''); }).join(' ');
+    var he = (t.match(/[֐-׿]/g) || []).length, la = (t.match(/[A-Za-z]/g) || []).length;
+    return la > he * 2 ? 'ltr' : 'rtl';
+  }
+  GK.songDir = songDir;
+
   function lyricsHtml(song) {
-    var out = [];
+    var out = [], d = ' dir="' + songDir(song) + '"';
     song.lines.forEach(function (l) {
-      if (l.section) out.push('<div class="sec">' + esc(l.section) + '</div>');
+      if (l.section) out.push('<div class="sec"' + d + '>' + esc(l.section) + '</div>');
       else if (l.gap && l.i > 0) out.push('<div class="gap"></div>');
       if (l.strumChanged) out.push('<div class="mini">' + strumMini(l.strum) + '</div>');
-      out.push('<div class="ln" data-i="' + l.i + '">' + l.segs.map(segHtml).join('') + '</div>');
+      out.push('<div class="ln" data-i="' + l.i + '"' + d + '>' + l.segs.map(segHtml).join('') + '</div>');
     });
     return out.join('');
   }
